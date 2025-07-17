@@ -24,3 +24,15 @@ public isolated function addUser(AddUser user) returns int|error {
     }
     return <int>result.affectedRowCount;
 }
+
+# Update user status in the database.
+# + userId - The ID of the user to update.
+# + verified - The new status to set for the user.
+# + return - Returns the number of affected rows or an error if the update fails.
+public isolated function updateUserStatus(string userId, boolean verified) returns int|error {
+    sql:ExecutionResult|error result = databaseClient->execute(updateUserStatusQuery(userId, verified));
+    if result is error {
+        return result;
+    }
+    return <int>result.affectedRowCount;
+}

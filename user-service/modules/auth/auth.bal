@@ -1,8 +1,8 @@
 import ballerina/crypto;
 import ballerina/time;
-import ballerina/regex;
 import ballerina/mime;
 import ballerina/io;
+import ballerina/log;
 
 configurable string salt = ?;
 configurable string keystorePath = ?;
@@ -35,42 +35,46 @@ public isolated function createVerificationToken(string userId) returns string|e
 # Verifies a signed token and checks expiry.
 # + token - the token to verify, formatted as `userId:timestamp.signatureBase64`
 # + return - true if the token is valid, false if invalid or expired, or an error if verification fails 
-public isolated function verifyToken(string token) returns boolean|error {
+public isolated function verifyToken(string token) returns string|error {
     crypto:PublicKey publicKey = check loadPublicKeyFromKeystore();
-    string[] parts = regex:split(token, "\\.");
-    if parts.length() != 2 {
-        return false;
+    int? dotIndex = token.lastIndexOf(".");
+    if dotIndex == () {
+        return error("Invalid token format");
     }
 
-    string payload = parts[0];
+    string payload = token.substring(0, dotIndex);
+    string encodedSignature = token.substring(dotIndex + 1);
+
     byte[] payloadBytes = payload.toBytes();
+    byte[] encodedSignatureBytes = encodedSignature.toBytes();
 
-    // Decode signature from Base64
-    string|byte[]|io:ReadableByteChannel signature = check mime:base64Decode(parts[1]);
-
-    if signature is string | io:ReadableByteChannel |  error {
-        return false;
+    string|byte[]|io:ReadableByteChannel signature = check mime:base64Decode(encodedSignatureBytes);
+    if signature is string | io:ReadableByteChannel | error {
+        return error("Invalid token signature");
     }
 
-    // Verify signature
     boolean isValid = check crypto:verifyRsaSha256Signature(payloadBytes, signature, publicKey);
     if !isValid {
-        return false;
+        return error("Signature verification failed");
     }
 
-    // Split payload: userId:timestamp
-    string[] payloadParts = regex:split(payload, ":");
-    if payloadParts.length() != 2 {
-        return false;
+    // Extract userId and timestamp from payload
+    int? columnIndex = payload.indexOf(":");
+    if columnIndex == () {
+        return error("Invalid token payload format");
     }
 
-    // Validate expiration time
-    time:Utc exp = check time:utcFromString(payloadParts[1]);
+    string userId = payload.substring(0, columnIndex);
+    string timestamp = payload.substring(columnIndex + 1);
+    log:printInfo("User ID: " + userId);
+
+    time:Utc exp = check time:utcFromString(timestamp);
+
     if time:utcNow() > exp {
-        return false;
+        return error("Token expired");
     }
 
-    return true;
+    return userId;
 }
 
 # Loads the private key from the keystore.

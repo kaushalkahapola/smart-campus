@@ -7,7 +7,7 @@ import ballerina/log;
 import ballerina/regex;
 import ballerina/uuid;
 
-configurable string BaseUrl = "http://localhost:9090"; 
+configurable string baseUrl = "http://localhost:9090"; 
 
 service / on new http:Listener(9090) {
 
@@ -16,11 +16,6 @@ service / on new http:Listener(9090) {
     # + return - Created | BadRequest | InternalServerError | Conflict.
     resource function post register(RegisterUser user)
         returns http:Created|http:BadRequest|http:InternalServerError|http:Conflict {
-        
-
-        log:printInfo("Received registration request for user: " + user.username);
-
-        // Validate the user input
         // check for valid email format with regex
         if (!regex:matches(user.email, "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$")) {
             string errorMessage = "Invalid email format: " + user.email;
@@ -77,8 +72,6 @@ service / on new http:Listener(9090) {
                 body: errorMessage
             };
         }
-        
-        log:printInfo("Generated UUID for new user: " + userId.toString());
 
         // create a new user record
         db:AddUser newUser = {
@@ -111,7 +104,7 @@ service / on new http:Listener(9090) {
         log:printInfo("Verification Token :" + verificationToken.toString());
 
         // send the verification email
-        error? emailError = notification:sendVerificationEmail(user.email, verificationLink = BaseUrl +  "/verify?token=" + verificationToken.toString());
+        error? emailError = notification:sendVerificationEmail(user.email, verificationLink = baseUrl +  "/verify?token=" + verificationToken.toString());
         if emailError is error {
             string errorMessage = "Error sending verification email: " + emailError.message();
             log:printError(errorMessage);
@@ -121,5 +114,45 @@ service / on new http:Listener(9090) {
         }
 
         return http:CREATED;
+    }
+
+    # This resource function handles user verification requests.
+    # It verifies the token provided in the request and updates the user's status in the database.
+    # + token - The verification token provided by the user.
+    # + return - Ok | BadRequest | InternalServerError | Unauthorized.
+    resource function get verify(string token) 
+        returns http:Ok|http:BadRequest|http:InternalServerError|http:Unauthorized {
+        // replace the spaces with '+' to handle URL encoding
+        string updatedToken = regex:replaceAll(token, " ", "+");
+        // Verify the token
+        string|error userId = auth:verifyToken(updatedToken);
+        if userId is error {
+            string errorMessage = "Error verifying token: " + userId.message();
+            log:printError(errorMessage);
+            return <http:BadRequest>{
+                body: errorMessage
+            };
+        }
+
+        // Token is valid, update user status in the database
+        int|error rowsAffected = db:updateUserStatus(userId, true);
+        if rowsAffected == 0 {
+            string errorMessage = "User not found or already verified.";
+            log:printError(errorMessage);
+            return <http:Unauthorized>{
+                body: errorMessage
+            };
+        } 
+        
+        if rowsAffected is error {
+            string errorMessage = "Error updating user status: " + rowsAffected.message();
+            log:printError(errorMessage);
+            return <http:InternalServerError>{
+                body: errorMessage
+            };
+        }
+
+        return http:OK;
+        
     }
 };
