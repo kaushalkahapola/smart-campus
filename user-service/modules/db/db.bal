@@ -13,6 +13,10 @@ public isolated function getUserByEmail(string email) returns User|error {
     }
 }
 
+# This function adds a new user to the database.
+#
+# + user - User object to add to the database.
+# + return - return affected row count.
 public isolated function addUser(AddUser user) returns int|error {
     sql:ExecutionResult|error result = databaseClient->execute(addUserQuery(user));
     if result is error {
