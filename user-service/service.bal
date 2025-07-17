@@ -1,5 +1,6 @@
 import user_service.auth;
 import user_service.db;
+import user_service.notification;
 
 import ballerina/http;
 import ballerina/log;
@@ -89,6 +90,16 @@ service / on new http:Listener(9090) {
         int|error result = db:addUser(newUser);
         if result is error {
             string errorMessage = "Error adding user to the database: " + result.message();
+            log:printError(errorMessage);
+            return <http:InternalServerError>{
+                body: errorMessage
+            };
+        }
+
+        // send the verification email
+        error? emailError = notification:sendVerificationEmail(user.email);
+        if emailError is error {
+            string errorMessage = "Error sending verification email: " + emailError.message();
             log:printError(errorMessage);
             return <http:InternalServerError>{
                 body: errorMessage

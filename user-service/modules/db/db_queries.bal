@@ -26,7 +26,7 @@ isolated function addUserQuery(AddUser user) returns sql:ParameterizedQuery {
     return
     `
         INSERT INTO 
-            users (id, username, email, hashed_password, role, is_active)
+            users (id, username, email, hashed_password)
         VALUES 
             (${user.id}, ${user.username}, ${user.email}, ${user.hashedPassword})
     `;
