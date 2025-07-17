@@ -1,6 +1,6 @@
 import user_service.auth;
 import user_service.db;
-// import user_service.notification;
+import user_service.notification;
 
 import ballerina/http;
 import ballerina/log;
@@ -104,15 +104,15 @@ service / on new http:Listener(9092) {
         string verificationLink = baseUrl +  "/verify?token=" + verificationToken.toString();
         log:printInfo("Verification Link :" + verificationLink.toString());
 
-        // // send the verification email
-        // error? emailError = notification:sendVerificationEmail(user.email, verificationLink);
-        // if emailError is error {
-        //     string errorMessage = "Error sending verification email: " + emailError.message();
-        //     log:printError(errorMessage);
-        //     return <http:InternalServerError>{
-        //         body: errorMessage
-        //     };
-        // }
+        // send the verification email
+        error? emailError = notification:sendVerificationEmail(user.email, verificationLink);
+        if emailError is error {
+            string errorMessage = "Error sending verification email: " + emailError.message();
+            log:printError(errorMessage);
+            return <http:InternalServerError>{
+                body: errorMessage
+            };
+        }
 
         return http:CREATED;
     }
@@ -159,6 +159,9 @@ service / on new http:Listener(9092) {
            
     }
 
+    # This function handles the user login process
+    # + req - User login request
+    # + return - Return the token and token type
     resource function post login(LoginResuest req) 
         returns http:Ok | http:Unauthorized | http:InternalServerError | http:NotFound {
         db:User|error user = db:getUserByEmail(req.email);
