@@ -7,6 +7,8 @@ import ballerina/log;
 import ballerina/regex;
 import ballerina/uuid;
 
+configurable string BaseUrl = "http://localhost:9090"; 
+
 service / on new http:Listener(9090) {
 
     # This resource function handles user registration requests.
@@ -96,8 +98,20 @@ service / on new http:Listener(9090) {
             };
         }
 
+        // create the verification token
+        string|error verificationToken = auth:createVerificationToken(userId.toString());
+        if verificationToken is error {
+            string errorMessage = "Error creating verification token: " + verificationToken.message();
+            log:printError(errorMessage);
+            return <http:InternalServerError>{
+                body: errorMessage
+            };
+        }
+
+        log:printInfo("Verification Token :" + verificationToken.toString());
+
         // send the verification email
-        error? emailError = notification:sendVerificationEmail(user.email);
+        error? emailError = notification:sendVerificationEmail(user.email, verificationLink = BaseUrl +  "/verify?token=" + verificationToken.toString());
         if emailError is error {
             string errorMessage = "Error sending verification email: " + emailError.message();
             log:printError(errorMessage);

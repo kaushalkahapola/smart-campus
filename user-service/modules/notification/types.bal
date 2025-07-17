@@ -6,4 +6,6 @@ type VerificationEmailRequest record {|
     string subject;
     # The body of the email
     string body;
+    # The verification link to be included in the email
+    string verificationLink;
 |};

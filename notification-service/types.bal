@@ -6,6 +6,8 @@ type VerificationEmailRequest record {|
     string subject;
     # The body of the email in plain text 
     string body;
+    # The verificaiton URL
+    string verificationLink;
 |};
 
 # SmtpCredentials is used to store SMTP server credentials

@@ -5,9 +5,8 @@ import ballerina/log;
 service  on new http:Listener(9091) {
     resource function post sendVerificationEmail(VerificationEmailRequest req) 
         returns http:Ok | http:InternalServerError  {
-        string verificationUrl = "https://www.google.com"; // Replace with actual verification URL
         string:RegExp pattern = re `\{\{verification_link\}\}`;
-        string updatedHtml = pattern.replaceAll(verificationEmailBody, verificationUrl);
+        string updatedHtml = pattern.replaceAll(verificationEmailBody, req.verificationLink);
 
 
         email:Message message = {
