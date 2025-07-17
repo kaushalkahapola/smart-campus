@@ -1,5 +1,5 @@
 # RegisterUser record type
-type RegisterUser record {|
+type RegisterRequest record {|
     # Username of the user to be added
     string username;
     # Email address of the user to be added
@@ -8,4 +8,12 @@ type RegisterUser record {|
     string password;
     # Confirmation of the password for validation
     string confirmPassword;
+|};
+
+# LoginRequest record type
+type LoginResuest record {|
+    # Email of the user
+    string email;
+    # Password of the user
+    string password;
 |};

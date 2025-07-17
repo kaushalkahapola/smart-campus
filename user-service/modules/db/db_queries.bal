@@ -11,7 +11,9 @@ isolated function getUserByEmailQuery(string email) returns sql:ParameterizedQue
             username, 
             email, 
             role, 
-            is_active 
+            hashed_password,
+            is_active,
+            is_verified
         FROM 
             users 
         WHERE 

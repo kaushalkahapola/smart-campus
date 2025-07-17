@@ -36,6 +36,11 @@ public type User record {|
     string id;
     # Username of the user
     string username;
+    # Hashed password of the user
+    @sql:Column {
+        name: "hashed_password"
+    }
+    string hashedPassword;
     # Email address of the user
     string email;
     # Role of the user (e.g., admin, user)
@@ -45,6 +50,11 @@ public type User record {|
         name: "is_active"
     }
     boolean isActive;
+    # Indicates if the user is verified
+    @sql:Column {
+        name: "is_verified"
+    }
+    boolean isVerified;
 |};
 
 # AddUser record type

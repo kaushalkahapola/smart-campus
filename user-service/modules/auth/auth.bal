@@ -3,11 +3,37 @@ import ballerina/time;
 import ballerina/mime;
 import ballerina/io;
 import ballerina/log;
+import ballerina/jwt;
 
 configurable string salt = ?;
 configurable string keystorePath = ?;
 configurable string keystoreAlias = ?;
 configurable string keystorePassword = ?;
+configurable IssuerConfig issuerConfig = {
+    issuer: "finmate",
+    audience: "finmate-clients",
+    expTime: 3600
+};
+
+# Loads the private key from the keystore.
+# + return - the private key if successfully loaded, or an error if loading fails
+isolated function loadPrivateKeyFromKeystore() returns crypto:PrivateKey|error {
+    crypto:KeyStore keystore = {
+        path: keystorePath,
+        password: keystorePassword
+    };
+    return crypto:decodeRsaPrivateKeyFromKeyStore(keystore, keystoreAlias, keystorePassword);
+}
+
+# Loads the public key from the keystore.
+# + return - the public key if successfully loaded, or an error if loading fails
+isolated function loadPublicKeyFromKeystore() returns crypto:PublicKey|error {
+    crypto:TrustStore trustStore = {
+        path: keystorePath,
+        password: keystorePassword
+    };
+    return crypto:decodeRsaPublicKeyFromTrustStore(trustStore, keystoreAlias);
+}
 
 # Hashes a password using SHA-256 and a configurable salt.
 # + password - the password to hash
@@ -77,22 +103,49 @@ public isolated function verifyToken(string token) returns string|error {
     return userId;
 }
 
-# Loads the private key from the keystore.
-# + return - the private key if successfully loaded, or an error if loading fails
-isolated function loadPrivateKeyFromKeystore() returns crypto:PrivateKey|error {
-    crypto:KeyStore keystore = {
-        path: keystorePath,
-        password: keystorePassword
+# Generates a JWT token for the user.
+# + userId - the ID of the user to generate the token for
+# + username - the username of the user
+# + role - the role of the user
+# + email - the email of the user
+# + return - the generated JWT token as a string, or an error if token generation fails
+public isolated function generateJwtToken(string userId, string username, string role, string email) returns string|error {
+    jwt:IssuerConfig config = {
+        username: username,
+        issuer: issuerConfig.issuer,
+        audience: issuerConfig.audience,
+        customClaims: {
+            "email": email,
+            "userId": userId,
+            "role": role
+        },
+        signatureConfig: {   
+            config: {
+                keyStore: {
+                    path: keystorePath,
+                    password: keystorePassword
+                },
+                keyAlias: keystoreAlias,
+                keyPassword: keystorePassword
+            }
+        }
     };
-    return crypto:decodeRsaPrivateKeyFromKeyStore(keystore, keystoreAlias, keystorePassword);
+
+    string jwtToken = check jwt:issue(config);
+
+    return jwtToken;
 }
 
-# Loads the public key from the keystore.
-# + return - the public key if successfully loaded, or an error if loading fails
-isolated function loadPublicKeyFromKeystore() returns crypto:PublicKey|error {
-    crypto:TrustStore trustStore = {
-        path: keystorePath,
-        password: keystorePassword
-    };
-    return crypto:decodeRsaPublicKeyFromTrustStore(trustStore, keystoreAlias);
+# Validate the user with email and password
+# + email - Email of the user
+# + hashedPassword - Hashed password of the user
+# + password - Password from reqest
+# + return - return the validated user
+public isolated function validateUser(string email, string hashedPassword, string password ) 
+    returns boolean|error {
+    string newHashedPassword = check hashPassword(password);
+    if hashedPassword !== newHashedPassword {
+        return error("Password do not match");
+    }
+    return true;
 }

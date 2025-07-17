@@ -1,20 +1,20 @@
 import user_service.auth;
 import user_service.db;
-import user_service.notification;
+// import user_service.notification;
 
 import ballerina/http;
 import ballerina/log;
 import ballerina/regex;
 import ballerina/uuid;
 
-configurable string baseUrl = "http://localhost:9090"; 
+configurable string baseUrl = "http://localhost:9092"; 
 
-service / on new http:Listener(9090) {
+service / on new http:Listener(9092) {
 
     # This resource function handles user registration requests.
     # + user - The user details to be registered.
     # + return - Created | BadRequest | InternalServerError | Conflict.
-    resource function post register(RegisterUser user)
+    resource function post register(RegisterRequest user)
         returns http:Created|http:BadRequest|http:InternalServerError|http:Conflict {
         // check for valid email format with regex
         if (!regex:matches(user.email, "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$")) {
@@ -101,17 +101,18 @@ service / on new http:Listener(9090) {
             };
         }
 
-        log:printInfo("Verification Token :" + verificationToken.toString());
+        string verificationLink = baseUrl +  "/verify?token=" + verificationToken.toString();
+        log:printInfo("Verification Link :" + verificationLink.toString());
 
-        // send the verification email
-        error? emailError = notification:sendVerificationEmail(user.email, verificationLink = baseUrl +  "/verify?token=" + verificationToken.toString());
-        if emailError is error {
-            string errorMessage = "Error sending verification email: " + emailError.message();
-            log:printError(errorMessage);
-            return <http:InternalServerError>{
-                body: errorMessage
-            };
-        }
+        // // send the verification email
+        // error? emailError = notification:sendVerificationEmail(user.email, verificationLink);
+        // if emailError is error {
+        //     string errorMessage = "Error sending verification email: " + emailError.message();
+        //     log:printError(errorMessage);
+        //     return <http:InternalServerError>{
+        //         body: errorMessage
+        //     };
+        // }
 
         return http:CREATED;
     }
@@ -136,6 +137,8 @@ service / on new http:Listener(9090) {
 
         // Token is valid, update user status in the database
         int|error rowsAffected = db:updateUserStatus(userId, true);
+
+        // Check if the update was successful
         if rowsAffected == 0 {
             string errorMessage = "User not found or already verified.";
             log:printError(errorMessage);
@@ -153,6 +156,58 @@ service / on new http:Listener(9090) {
         }
 
         return http:OK;
-        
+           
+    }
+
+    resource function post login(LoginResuest req) 
+        returns http:Ok | http:Unauthorized | http:InternalServerError | http:NotFound {
+        db:User|error user = db:getUserByEmail(req.email);
+        if user is error {
+            string errorMessage = "User not found";
+            log:printError(errorMessage);
+            return <http:NotFound>{
+                body:  errorMessage
+            };
+        }
+
+        if !user.isVerified {
+            string errorMessage = "User not Verified";
+            log:printError(errorMessage);
+            return <http:Unauthorized>{
+                body:  errorMessage
+            };
+        }
+
+        boolean|error isValid = auth:validateUser(user.email, user.hashedPassword, req.password);
+
+        if isValid is error{
+            string errorMessage = "Username and password do not match";
+            log:printError(errorMessage);
+            return <http:Unauthorized>{
+                body:  errorMessage
+            };
+        }
+
+        string|error jwt = auth:generateJwtToken(
+            userId = user.id,
+            username = user.username,
+            email = user.email,
+            role = user.role
+        );
+
+        if jwt is error{
+            string errorMessage = "Error while creating the jwt token";
+            log:printError(errorMessage);
+            return <http:InternalServerError>{
+                body:  errorMessage
+            };
+        }
+
+        return <http:Ok> {
+            body:  {
+                access_token: jwt,
+                token_type: "Bearer"
+            }
+        };
     }
 };
