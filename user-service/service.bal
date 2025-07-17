@@ -82,9 +82,7 @@ service / on new http:Listener(9090) {
             id: userId,
             username: user.username,
             hashedPassword: hashedPassword,
-            email: user.email,
-            role: db:USER, // Default role is USER
-            isActive: true // New users are active by default
+            email: user.email
         };
 
         // Insert the record into the database

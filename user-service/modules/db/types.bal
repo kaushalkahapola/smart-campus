@@ -60,11 +60,4 @@ public type AddUser record {|
         name: "hashed_password"
     }
     string hashedPassword;
-    # Role of the user (e.g., admin, user)
-    Role role;
-    # Indicates if the user is active
-    @sql:Column {
-        name: "is_active"
-    }
-    boolean isActive;
 |};
