@@ -8,9 +8,9 @@ USE finmate;
 -- It also includes timestamps for creation and updates, as well as a field for the last login time
 -- The 'updated_by' field is used to track who last updated the record, which can be useful for auditing purposes
 CREATE TABLE users (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id VARCHAR(100) NOT NULL PRIMARY KEY UNIQUE,
     username VARCHAR(50) NOT NULL UNIQUE,
-    password_hash VARCHAR(255) NOT NULL,
+    hashed_password VARCHAR(255) NOT NULL,
     email VARCHAR(100) NOT NULL UNIQUE,
     role ENUM('user', 'admin') DEFAULT 'user',
     is_active BOOLEAN DEFAULT TRUE,

@@ -1,10 +1,17 @@
-# Returns the string `Hello` with the input string name.
+import ballerina/crypto;
+
+
+configurable string salt = ?;
+
+# This function hashes a password using SHA-256.
 #
-# + name - name as a string or nil
-# + return - "Hello, " with the input string name
-public function hello(string? name) returns string {
-    if name !is () {
-        return string `Hello, ${name}`;
-    }
-    return "Hello, World!";
+# + password - the password string to be hashed.
+# + return - the hashed password as a hexadecimal string or an error if hashing fails.
+public isolated function hashPassword(string password) returns string|error {
+    // Use the crypto module to hash the password
+    byte[] passwordBytes = password.toBytes();
+    byte[] hashedBytes = crypto:hashSha256(passwordBytes, salt.toBytes());
+    // Convert the hashed bytes to a hexadecimal string
+    string hashedPassword = hashedBytes.toString();
+    return hashedPassword;
 }
