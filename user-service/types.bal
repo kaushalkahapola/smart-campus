@@ -1,3 +1,50 @@
+import ballerina/http;
+
+# Notfound Response record type
+type NotFoundResponse record {|
+    *http:NotFound;
+    # payload 
+    record {|
+        string errorMessage;
+    |} body;
+|};
+
+# BadRequest Response record type
+type BadRequestResponse record {|
+    *http:BadRequest;
+    # payload 
+    record {|
+        string errorMessage;
+    |} body;
+|};
+
+# InternalServerError Response record type
+type InternalServerErrorResponse record {|
+    *http:InternalServerError;
+    # payload 
+    record {|
+        string errorMessage;
+    |} body;
+|};
+
+# Conflict Response record type
+type ConflictResponse record {|
+    *http:Conflict;
+    # payload 
+    record {|
+        string errorMessage;
+    |} body;
+|};
+
+# Unauthorized Response record type
+type UnauthorizedResponse record {|
+    *http:Unauthorized;
+    # payload 
+    record {|
+        string errorMessage;
+    |} body;
+|};
+
 # RegisterUser record type
 type RegisterRequest record {|
     # Username of the user to be added
@@ -11,9 +58,38 @@ type RegisterRequest record {|
 |};
 
 # LoginRequest record type
-type LoginResuest record {|
+type LoginRequest record {|
     # Email of the user
     string email;
     # Password of the user
     string password;
+|};
+
+# UserRegisteredResponse record type
+type UserRegisteredResponse record {|
+    *http:Created;
+    # payload 
+    record {|
+        string userId;
+        string message;
+    |} body;
+|};    
+
+# UserVerifiedResponse record type
+type UserVerifiedResponse record {|
+    *http:Ok;
+    # payload 
+    record {|
+        string message;
+    |} body;
+|};
+
+# UserLoginResponse record type
+type UserLoginResponse record {|
+    *http:Ok;
+    # payload 
+    record {|
+        string token;
+        string tokenType;
+    |} body;
 |};

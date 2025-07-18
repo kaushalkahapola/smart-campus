@@ -12,16 +12,19 @@ configurable string baseUrl = "http://localhost:9092";
 service / on new http:Listener(9092) {
 
     # This resource function handles user registration requests.
+    # 
     # + user - The user details to be registered.
     # + return - Created | BadRequest | InternalServerError | Conflict.
     resource function post register(RegisterRequest user)
-        returns http:Created|http:BadRequest|http:InternalServerError|http:Conflict {
+        returns UserRegisteredResponse|BadRequestResponse|InternalServerErrorResponse|ConflictResponse {
         // check for valid email format with regex
         if (!regex:matches(user.email, "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$")) {
             string errorMessage = "Invalid email format: " + user.email;
             log:printError(errorMessage);
-            return <http:BadRequest>{
-                body: errorMessage
+            return <BadRequestResponse>{
+                body:{
+                    errorMessage
+                }
             };
         }
 
@@ -30,8 +33,10 @@ service / on new http:Listener(9092) {
         if existingUser is db:User {
             string errorMessage = "User with email " + user.email + " already exists.";
             log:printError(errorMessage);
-            return <http:Conflict>{
-                body: errorMessage
+            return <ConflictResponse>{
+                body:{
+                    errorMessage
+                }
             };
         }
 
@@ -39,17 +44,23 @@ service / on new http:Listener(9092) {
         if (user.password != user.confirmPassword) {
             string errorMessage = "Passwords do not match.";
             log:printError(errorMessage);
-            return <http:BadRequest>{
-                body: errorMessage
+            return <BadRequestResponse>{
+                body:{
+                    errorMessage
+                }
             };
         }
 
         // check if password is strong enough
         if (!regex:matches(user.password, "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$")) {
-            string errorMessage = "Password must be at least 8 characters long, contain at least one uppercase letter, one lowercase letter, one number, and one special character.";
+            string errorMessage = "Password must be at least 8 characters long, " +
+                                  "contain at least one uppercase letter, " +
+                                  "one lowercase letter, one number, and one special character.";
             log:printError(errorMessage);
-            return <http:BadRequest>{
-                body: errorMessage
+            return <BadRequestResponse>{
+                body:{
+                    errorMessage
+                }
             };
         }
 
@@ -58,18 +69,22 @@ service / on new http:Listener(9092) {
         if hashedPassword is error {
             string errorMessage = "Error hashing password: " + hashedPassword.message();
             log:printError(errorMessage);
-            return <http:InternalServerError>{
-                body: errorMessage
+            return <InternalServerErrorResponse>{
+                body:{
+                    errorMessage
+                }
             };
         }
 
         string|error userId = uuid:createType1AsString();
 
         if userId is error {
-            string errorMessage = "UUID generation failed";
+            string errorMessage = "UUID generation failed :" + userId.message();
             log:printError(errorMessage);
-            return <http:InternalServerError>{
-                body: errorMessage
+            return <InternalServerErrorResponse>{
+                body:{
+                    errorMessage
+                }
             };
         }
 
@@ -86,8 +101,10 @@ service / on new http:Listener(9092) {
         if result is error {
             string errorMessage = "Error adding user to the database: " + result.message();
             log:printError(errorMessage);
-            return <http:InternalServerError>{
-                body: errorMessage
+            return <InternalServerErrorResponse>{
+                body:{
+                    errorMessage
+                }
             };
         }
 
@@ -96,8 +113,10 @@ service / on new http:Listener(9092) {
         if verificationToken is error {
             string errorMessage = "Error creating verification token: " + verificationToken.message();
             log:printError(errorMessage);
-            return <http:InternalServerError>{
-                body: errorMessage
+            return <InternalServerErrorResponse>{
+                body:{
+                    errorMessage
+                }
             };
         }
 
@@ -109,20 +128,27 @@ service / on new http:Listener(9092) {
         if emailError is error {
             string errorMessage = "Error sending verification email: " + emailError.message();
             log:printError(errorMessage);
-            return <http:InternalServerError>{
-                body: errorMessage
+            return <InternalServerErrorResponse>{
+                body:{
+                    errorMessage
+                }
             };
         }
 
-        return http:CREATED;
+        return <UserRegisteredResponse>{
+            body: {
+                userId: userId,
+                message: "User registered successfully. Please check your email for verification link."
+            }
+        };
     }
 
     # This resource function handles user verification requests.
-    # It verifies the token provided in the request and updates the user's status in the database.
+    # 
     # + token - The verification token provided by the user.
     # + return - Ok | BadRequest | InternalServerError | Unauthorized.
     resource function get verify(string token) 
-        returns http:Ok|http:BadRequest|http:InternalServerError|http:Unauthorized {
+        returns UserVerifiedResponse|BadRequestResponse|InternalServerErrorResponse|UnauthorizedResponse {
         // replace the spaces with '+' to handle URL encoding
         string updatedToken = regex:replaceAll(token, " ", "+");
         // Verify the token
@@ -130,67 +156,95 @@ service / on new http:Listener(9092) {
         if userId is error {
             string errorMessage = "Error verifying token: " + userId.message();
             log:printError(errorMessage);
-            return <http:BadRequest>{
-                body: errorMessage
+            return <BadRequestResponse>{
+                body: {
+                    errorMessage
+                }
             };
         }
 
+        db:UpdateUser updateUser = {
+            id: userId.toString(),
+            isActive: true,
+            isVerified: true
+        };
+
         // Token is valid, update user status in the database
-        int|error rowsAffected = db:updateUserStatus(userId, true);
+        int|error rowsAffected = db:updateUser(updateUser);
 
         // Check if the update was successful
         if rowsAffected == 0 {
             string errorMessage = "User not found or already verified.";
             log:printError(errorMessage);
-            return <http:Unauthorized>{
-                body: errorMessage
+            return <UnauthorizedResponse>{
+                body: {
+                    errorMessage
+                }
             };
         } 
         
         if rowsAffected is error {
             string errorMessage = "Error updating user status: " + rowsAffected.message();
             log:printError(errorMessage);
-            return <http:InternalServerError>{
-                body: errorMessage
+            return <InternalServerErrorResponse>{
+                body: {
+                    errorMessage
+                }
             };
         }
 
-        return http:OK;
+        return <UserVerifiedResponse>{
+            body: {
+                message: "User verified successfully."
+            }
+        };
            
     }
 
     # This function handles the user login process
+    # 
     # + req - User login request
     # + return - Return the token and token type
-    resource function post login(LoginResuest req) 
-        returns http:Ok | http:Unauthorized | http:InternalServerError | http:NotFound {
+    resource function post login(LoginRequest req) 
+        returns UserLoginResponse|UnauthorizedResponse|InternalServerErrorResponse|NotFoundResponse {
+
+        // Get the user by email
         db:User|error user = db:getUserByEmail(req.email);
         if user is error {
             string errorMessage = "User not found";
             log:printError(errorMessage);
-            return <http:NotFound>{
-                body:  errorMessage
+            return <NotFoundResponse>{
+                body:  {
+                    errorMessage
+                }
             };
         }
 
+        // Check if the user is verified
         if !user.isVerified {
             string errorMessage = "User not Verified";
             log:printError(errorMessage);
-            return <http:Unauthorized>{
-                body:  errorMessage
+            return <UnauthorizedResponse>{
+                body:  {
+                    errorMessage
+                }
             };
         }
 
+        // Validate the user with the credentials
         boolean|error isValid = auth:validateUser(user.email, user.hashedPassword, req.password);
 
-        if isValid is error{
+        if isValid is false|error{
             string errorMessage = "Username and password do not match";
             log:printError(errorMessage);
-            return <http:Unauthorized>{
-                body:  errorMessage
+            return <UnauthorizedResponse>{
+                body:  {
+                    errorMessage
+                }
             };
         }
 
+        // Generating the access token
         string|error jwt = auth:generateJwtToken(
             userId = user.id,
             username = user.username,
@@ -199,17 +253,19 @@ service / on new http:Listener(9092) {
         );
 
         if jwt is error{
-            string errorMessage = "Error while creating the jwt token";
+            string errorMessage = "Error while creating the jwt token :" + jwt.message();
             log:printError(errorMessage);
-            return <http:InternalServerError>{
-                body:  errorMessage
+            return <InternalServerErrorResponse>{
+                body: {
+                    errorMessage
+                }
             };
         }
 
-        return <http:Ok> {
-            body:  {
-                access_token: jwt,
-                token_type: "Bearer"
+        return <UserLoginResponse>{
+            body: {
+                token: jwt,
+                tokenType: "Bearer"
             }
         };
     }

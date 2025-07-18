@@ -26,11 +26,10 @@ public isolated function addUser(AddUser user) returns int|error {
 }
 
 # Update user status in the database.
-# + userId - The ID of the user to update.
-# + verified - The new status to set for the user.
+# + user - The user object with updated fields.
 # + return - Returns the number of affected rows or an error if the update fails.
-public isolated function updateUserStatus(string userId, boolean verified) returns int|error {
-    sql:ExecutionResult|error result = databaseClient->execute(updateUserStatusQuery(userId, verified));
+public isolated function updateUser(UpdateUser user) returns int|error {
+    sql:ExecutionResult|error result = databaseClient->execute(updateUserQuery(user));
     if result is error {
         return result;
     }

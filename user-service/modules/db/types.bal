@@ -71,3 +71,22 @@ public type AddUser record {|
     }
     string hashedPassword;
 |};
+
+# UpdateUser record type
+public type UpdateUser record {|
+    # Unique identifier for the user
+    string id;
+    # Username of the user
+    string username?;
+    # Email address of the user
+    string email?;
+    # Hashed password of the user
+    @sql:Column {
+        name: "hashed_password"
+    }
+    string hashedPassword?;
+    # Indicates if the user is active
+    boolean isActive?;
+    # Indicates if the user is verified
+    boolean isVerified?;
+|};

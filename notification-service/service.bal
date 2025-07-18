@@ -4,7 +4,7 @@ import ballerina/log;
 
 service  on new http:Listener(9091) {
     resource function post sendVerificationEmail(VerificationEmailRequest req) 
-        returns http:Ok | http:InternalServerError  {
+        returns VerificationEmailResponse | InternalServerErrorResponse {
         string:RegExp pattern = re `\{\{verification_link\}\}`;
         string updatedHtml = pattern.replaceAll(verificationEmailBody, req.verificationLink);
 
@@ -21,11 +21,17 @@ service  on new http:Listener(9091) {
         if response is email:Error {
             string errorMessage = "Failed to send verification email: " + response.message();
             log:printError(errorMessage);
-            return <http:InternalServerError>{
-                body: errorMessage
+            return <InternalServerErrorResponse>{
+                body: {
+                    errorMessage: errorMessage
+                }
             };
         }
 
-        return http:OK;
+        return <VerificationEmailResponse>{
+            body: {
+                message: "Verification email sent successfully."
+            }
+        };
     }
 }
