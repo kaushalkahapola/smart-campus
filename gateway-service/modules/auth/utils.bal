@@ -56,3 +56,16 @@ isolated function createUnauthorizedResponse(string message) returns http:Forbid
     };
     return forbiddenResponse;
 }
+
+# Check if the user has required permissions
+# + userRole - The roles assigned to the user
+# + requiredRole - The roles required to access the resource
+# + return - true if the user has the required permissions, false otherwise
+public isolated function hasRequiredPermissions(UserRole userRole, UserRole[] requiredRole) returns boolean {
+    foreach UserRole role in requiredRole {
+        if role == userRole {
+            return true;
+        }
+    }
+    return false;
+}

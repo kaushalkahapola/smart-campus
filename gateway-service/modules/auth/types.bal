@@ -17,3 +17,10 @@ type IssuerConfig record {|
     # The audience for the token.
     string audience;
 |};
+
+public enum UserRole {
+    # Admin role
+    ADMIN = "admin",
+    # User role
+    USER = "user"  
+};

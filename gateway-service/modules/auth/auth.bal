@@ -54,17 +54,13 @@ public isolated service class AuthInterceptor {
             return createUnauthorizedResponse("Invalid or expired token");
         }
         log:printInfo("JWT validation successful: " + jwtPayload.toString());
-
-        string userId = jwtPayload["userId"].toString();
-        string email = jwtPayload["email"].toString();
-        string role = jwtPayload["role"].toString();
         
         // Add user information to request context for downstream services
-        ctx.set("userId", userId);
-        ctx.set("email", email);
-        ctx.set("role", role);
+        ctx.set("userId", jwtPayload["userId"].toString());
+        ctx.set("email", jwtPayload["email"].toString());
+        ctx.set("role", jwtPayload["role"].toString());
 
-        log:printInfo("User authenticated successfully: " + email);
+        log:printInfo("User authenticated successfully: " + jwtPayload["email"].toString());
 
         // Continue to the next service
         return ctx.next();
