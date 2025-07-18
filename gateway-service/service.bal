@@ -1,6 +1,37 @@
 import ballerina/http;
 
-service /api on new http:Listener(9090) {
+import gateway_service.auth;
+import ballerina/log;
+
+# Interceptor to handle errors in the response
+service class ErrorInterceptor {
+    *http:ResponseErrorInterceptor;
+
+    # This function intercepts errors in the response and handles them.
+    # + err - The error that occurred during the response
+    # + ctx - The HTTP request context
+    # + return - Returns an HTTP BadRequest response with a custom error message
+    remote function interceptResponseError(error err, http:RequestContext ctx) returns http:BadRequest|error {
+
+        // Handle data-binding errors.
+        if err is http:PayloadBindingError {
+            string customError = string `Payload binding failed!`;
+            log:printError(customError, err);
+            return {
+                body: {
+                    message: customError
+                }
+            };
+        }
+        return err;
+    }
+}
+
+service http:InterceptableService /api on new http:Listener(9090) {
+
+    public function createInterceptors() returns http:Interceptor[] {
+        return [new auth:AuthInterceptor(), new ErrorInterceptor()];
+    }
 
     # This resource function handles user registration requests.
     # 
@@ -9,7 +40,9 @@ service /api on new http:Listener(9090) {
     # + return - Returns an `http:Response` with the result of the registration process
     resource function post user/register(http:Caller caller, http:Request req) returns error? {
         http:Response|error response = userServiceClient->post("/register", req);
+        log:printInfo("Received response from user service for registration with status: " + (check response).statusCode.toString());
         if response is http:Response {
+            log:printInfo("User registered successfully");
             return caller->respond(response);
         } else {
             return caller->respond(createInternalServerError());
@@ -47,5 +80,14 @@ service /api on new http:Listener(9090) {
         } else {
             return caller->respond(createInternalServerError());
         }
+    }
+
+    # This resource function is a sample endpoint to demonstrate the interceptor.
+    # It can be removed or modified as needed.
+    # + caller - The HTTP caller to respond to.
+    # + req - The HTTP request.
+    # + return - Returns a sample response from the gateway service
+    resource function get sample(http:Caller caller, http:Request req) returns error? {
+        return caller->respond("Sample response from gateway service");
     }
 }

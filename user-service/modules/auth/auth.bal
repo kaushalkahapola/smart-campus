@@ -10,6 +10,7 @@ configurable string keystorePath = ?;
 configurable string keystoreAlias = ?;
 configurable string keystorePassword = ?;
 configurable IssuerConfig issuerConfig = {
+    username: "finmate",
     issuer: "finmate",
     audience: "finmate-clients",
     expTime: 3600
@@ -111,10 +112,11 @@ public isolated function verifyToken(string token) returns string|error {
 # + return - the generated JWT token as a string, or an error if token generation fails
 public isolated function generateJwtToken(string userId, string username, string role, string email) returns string|error {
     jwt:IssuerConfig config = {
-        username: username,
+        username: issuerConfig.username,
         issuer: issuerConfig.issuer,
         audience: issuerConfig.audience,
         customClaims: {
+            "username": username,
             "email": email,
             "userId": userId,
             "role": role

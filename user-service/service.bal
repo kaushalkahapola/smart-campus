@@ -1,6 +1,6 @@
 import user_service.auth;
 import user_service.db;
-import user_service.notification;
+// import user_service.notification;
 
 import ballerina/http;
 import ballerina/log;
@@ -124,16 +124,16 @@ service / on new http:Listener(9092) {
         log:printInfo("Verification Link :" + verificationLink.toString());
 
         // send the verification email
-        error? emailError = notification:sendVerificationEmail(user.email, verificationLink);
-        if emailError is error {
-            string errorMessage = "Error sending verification email: " + emailError.message();
-            log:printError(errorMessage);
-            return <InternalServerErrorResponse>{
-                body:{
-                    errorMessage
-                }
-            };
-        }
+        // error? emailError = notification:sendVerificationEmail(user.email, verificationLink);
+        // if emailError is error {
+        //     string errorMessage = "Error sending verification email: " + emailError.message();
+        //     log:printError(errorMessage);
+        //     return <InternalServerErrorResponse>{
+        //         body:{
+        //             errorMessage
+        //         }
+        //     };
+        // }
 
         return <UserRegisteredResponse>{
             body: {
