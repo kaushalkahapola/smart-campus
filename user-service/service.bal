@@ -7,14 +7,14 @@ import ballerina/log;
 import ballerina/regex;
 import ballerina/uuid;
 
-configurable string baseUrl = "http://localhost:9092"; 
+configurable string gatewayUrl = "http://localhost:9090"; 
 
 service / on new http:Listener(9092) {
 
     # This resource function handles user registration requests.
     # 
     # + user - The user details to be registered.
-    # + return - Created | BadRequest | InternalServerError | Conflict.
+    # + return - UserRegisteredResponse|BadRequestResponse|InternalServerErrorResponse|ConflictResponse
     resource function post register(RegisterRequest user)
         returns UserRegisteredResponse|BadRequestResponse|InternalServerErrorResponse|ConflictResponse {
         // check for valid email format with regex
@@ -120,7 +120,7 @@ service / on new http:Listener(9092) {
             };
         }
 
-        string verificationLink = baseUrl +  "/verify?token=" + verificationToken.toString();
+        string verificationLink = gatewayUrl +  "/api/user/verify?token=" + verificationToken.toString();
         log:printInfo("Verification Link :" + verificationLink.toString());
 
         // send the verification email
@@ -146,7 +146,7 @@ service / on new http:Listener(9092) {
     # This resource function handles user verification requests.
     # 
     # + token - The verification token provided by the user.
-    # + return - Ok | BadRequest | InternalServerError | Unauthorized.
+    # + return - UserVerifiedResponse|BadRequestResponse|InternalServerErrorResponse|UnauthorizedResponse
     resource function get verify(string token) 
         returns UserVerifiedResponse|BadRequestResponse|InternalServerErrorResponse|UnauthorizedResponse {
         // replace the spaces with '+' to handle URL encoding
@@ -204,7 +204,7 @@ service / on new http:Listener(9092) {
     # This function handles the user login process
     # 
     # + req - User login request
-    # + return - Return the token and token type
+    # + return - UserLoginResponse|UnauthorizedResponse|InternalServerErrorResponse|NotFoundResponse
     resource function post login(LoginRequest req) 
         returns UserLoginResponse|UnauthorizedResponse|InternalServerErrorResponse|NotFoundResponse {
 
