@@ -89,21 +89,10 @@ service http:InterceptableService /api on new http:Listener(9090) {
     # + req - The HTTP request.
     # + return - Returns a sample response from the gateway service
     resource function get sample(http:RequestContext ctx, http:Caller caller, http:Request req) returns error? {
-        // Check if the user has the required permissions
-        boolean hasPermission = auth:hasRequiredPermissions(
-            <auth:UserRole>ctx.get("role").toString(),
-            [auth:USER]
-        );
-
-        if !hasPermission {
-            return caller->respond(createForbiddenError("You do not have permission to access this resource"));
-        }
 
         // Prepare headers for the user service call
         map<string> headers = {
-            "x-user-id": ctx.get("userId").toString(),
-            "x-email": ctx.get("email").toString(),
-            "x-role": ctx.get("role").toString()
+            "X-User-Id": ctx.get("username").toString()
         };
 
         // Call the user service with the prepared headers

@@ -275,17 +275,13 @@ service / on new http:Listener(9092) {
     # + req - The HTTP request 
     # + return - Returns a sample response from the user service
     resource function get sample(http:Request req) returns string {
-        string|error userId = req.getHeader("x-user-id");
-        string|error email = req.getHeader("x-email");
-        string|error role = req.getHeader("x-role");
-        if userId is error || email is error || role is error {
+        string|error username = req.getHeader("X-User-Id");
+        if username is error {
             return "Missing headers in request";
         }
         log:printInfo(
-            "Received request from userId: " 
-                + userId.toString() + ", email: " 
-                + email.toString() + ", role: " 
-                + role.toString()
+            "Received request from username: " 
+                + username.toString()
         );
 
         return "This is a sample resource in the user service.";

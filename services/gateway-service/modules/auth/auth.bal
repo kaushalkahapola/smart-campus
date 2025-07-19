@@ -2,15 +2,6 @@ import ballerina/http;
 import ballerina/jwt;
 import ballerina/log;
 
-configurable string keystorePath = ?;
-configurable string keystoreAlias = ?;
-configurable string keystorePassword = ?;
-configurable IssuerConfig issuerConfig = {
-    username: "finmate",
-    issuer: "finmate",
-    audience: "finmate-clients"
-};
-
 # Interceptor to handle authentication
 public isolated service class AuthInterceptor {
     *http:RequestInterceptor;
@@ -44,23 +35,21 @@ public isolated service class AuthInterceptor {
             return createUnauthorizedResponse("Invalid Authorization header format");
         }
         
-        // Extract JWT token
-        string jwtToken = authHeader.substring(7); // Remove "Bearer " prefix
-        
-        // Validate JWT token
-        jwt:Payload|error jwtPayload = validateJwtToken(jwtToken);
+        // Extract access token
+        string accessToken = authHeader.substring(7); // Remove "Bearer " prefix
+
+        // Validate access token
+        jwt:Payload|error jwtPayload = validateToken(accessToken);
         if (jwtPayload is error) {
-            log:printError("JWT validation failed: " + jwtPayload.message());
+            log:printError("Token validation failed: " + jwtPayload.message());
             return createUnauthorizedResponse("Invalid or expired token");
         }
-        log:printInfo("JWT validation successful: " + jwtPayload.toString());
+        log:printInfo("Token validation successful: " + jwtPayload.toString());
         
         // Add user information to request context for downstream services
-        ctx.set("userId", jwtPayload["userId"].toString());
-        ctx.set("email", jwtPayload["email"].toString());
-        ctx.set("role", jwtPayload["role"].toString());
+        ctx.set("username", jwtPayload["username"].toString());
 
-        log:printInfo("User authenticated successfully: " + jwtPayload["email"].toString());
+        log:printInfo("User authenticated successfully: " + jwtPayload["username"].toString());
 
         // Continue to the next service
         return ctx.next();
