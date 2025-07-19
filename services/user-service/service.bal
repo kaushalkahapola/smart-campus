@@ -276,9 +276,11 @@ service / on new http:Listener(9092) {
     # + return - Returns a sample response from the user service
     resource function get sample(http:Request req) returns string {
         string|error username = req.getHeader("X-User-Id");
-        if username is error {
+        string|error accessToken = req.getHeader("Authorization");
+        if username is error || accessToken is error {
             return "Missing headers in request";
         }
+        log:printInfo("Received authorization header: " + accessToken.toString());
         log:printInfo(
             "Received request from username: " 
                 + username.toString()

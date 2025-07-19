@@ -45,7 +45,7 @@ public isolated service class AuthInterceptor {
             return createUnauthorizedResponse("Invalid or expired token");
         }
         log:printInfo("Token validation successful");
-        json|error jwtPayload = getUserInfo(accessToken);
+        json|error jwtPayload = getCachedUserInfo(accessToken);
         if (jwtPayload is error) {
             log:printError("JWT validation failed: " + jwtPayload.message());
             return createUnauthorizedResponse("Invalid JWT token");
@@ -68,6 +68,10 @@ public isolated service class AuthInterceptor {
         }
 
         log:printInfo("User authenticated successfully: ");
+
+        // Generate a new access token for M2M communication using cache
+        string m2mToken = check getCachedM2MToken();
+        ctx.set("m2mToken", m2mToken);
 
         // Continue to the next service
         return ctx.next();
