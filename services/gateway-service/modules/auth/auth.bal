@@ -1,5 +1,5 @@
 import ballerina/http;
-import ballerina/jwt;
+// import ballerina/jwt;
 import ballerina/log;
 
 # Interceptor to handle authentication
@@ -39,17 +39,35 @@ public isolated service class AuthInterceptor {
         string accessToken = authHeader.substring(7); // Remove "Bearer " prefix
 
         // Validate access token
-        jwt:Payload|error jwtPayload = validateToken(accessToken);
-        if (jwtPayload is error) {
-            log:printError("Token validation failed: " + jwtPayload.message());
+        boolean|error isvalid = validateToken(accessToken);
+        if (isvalid is error) {
+            log:printError("Token validation failed: " + isvalid.message());
             return createUnauthorizedResponse("Invalid or expired token");
         }
-        log:printInfo("Token validation successful: " + jwtPayload.toString());
-        
-        // Add user information to request context for downstream services
-        ctx.set("username", jwtPayload["username"].toString());
+        log:printInfo("Token validation successful");
+        json|error jwtPayload = getUserInfo(accessToken);
+        if (jwtPayload is error) {
+            log:printError("JWT validation failed: " + jwtPayload.message());
+            return createUnauthorizedResponse("Invalid JWT token");
+        }
 
-        log:printInfo("User authenticated successfully: " + jwtPayload["username"].toString());
+        // Add user information to request context for downstream services
+        if (jwtPayload is map<json>) {
+            json|error username = jwtPayload["username"];
+            json|error userId = jwtPayload["sub"];
+            if (username is string && userId is string) {
+                ctx.set("username", username);
+                ctx.set("userId", userId);
+            } else {
+                log:printError("Username not found or invalid in JWT payload");
+                return createUnauthorizedResponse("Invalid JWT payload");
+            }
+        } else {
+            log:printError("JWT payload is not a valid map");
+            return createUnauthorizedResponse("Invalid JWT payload format");
+        }
+
+        log:printInfo("User authenticated successfully: ");
 
         // Continue to the next service
         return ctx.next();

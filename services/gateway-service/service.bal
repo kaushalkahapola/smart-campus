@@ -92,7 +92,7 @@ service http:InterceptableService /api on new http:Listener(9090) {
 
         // Prepare headers for the user service call
         map<string> headers = {
-            "X-User-Id": ctx.get("username").toString()
+            "X-User-Id": ctx.get("userId").toString()
         };
 
         // Call the user service with the prepared headers

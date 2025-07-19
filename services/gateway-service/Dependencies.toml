@@ -118,9 +118,6 @@ dependencies = [
 	{org = "ballerina", name = "log"},
 	{org = "ballerina", name = "time"}
 ]
-modules = [
-	{org = "ballerina", packageName = "jwt", moduleName = "jwt"}
-]
 
 [[package]]
 org = "ballerina"
@@ -233,9 +230,6 @@ dependencies = [
 	{org = "ballerina", name = "time"},
 	{org = "ballerina", name = "url"}
 ]
-modules = [
-	{org = "ballerina", packageName = "oauth2", moduleName = "oauth2"}
-]
 
 [[package]]
 org = "ballerina"
@@ -278,6 +272,9 @@ version = "2.4.0"
 dependencies = [
 	{org = "ballerina", name = "jballerina.java"}
 ]
+modules = [
+	{org = "ballerina", packageName = "url", moduleName = "url"}
+]
 
 [[package]]
 org = "ballerinai"
@@ -297,9 +294,8 @@ name = "gateway_service"
 version = "0.1.0"
 dependencies = [
 	{org = "ballerina", name = "http"},
-	{org = "ballerina", name = "jwt"},
 	{org = "ballerina", name = "log"},
-	{org = "ballerina", name = "oauth2"},
+	{org = "ballerina", name = "url"},
 	{org = "ballerinai", name = "observe"}
 ]
 modules = [
