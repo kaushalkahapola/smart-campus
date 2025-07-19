@@ -1,7 +1,7 @@
 import ballerina/http;
 
 # Notfound Response record type
-type NotFoundResponse record {|
+public type NotFoundResponse record {|
     *http:NotFound;
     # payload 
     record {|
@@ -10,7 +10,7 @@ type NotFoundResponse record {|
 |};
 
 # BadRequest Response record type
-type BadRequestResponse record {|
+public type BadRequestResponse record {|
     *http:BadRequest;
     # payload 
     record {|
@@ -19,7 +19,7 @@ type BadRequestResponse record {|
 |};
 
 # InternalServerError Response record type
-type InternalServerErrorResponse record {|
+public type InternalServerErrorResponse record {|
     *http:InternalServerError;
     # payload 
     record {|
@@ -28,7 +28,7 @@ type InternalServerErrorResponse record {|
 |};
 
 # Conflict Response record type
-type ConflictResponse record {|
+public type ConflictResponse record {|
     *http:Conflict;
     # payload 
     record {|
@@ -37,7 +37,7 @@ type ConflictResponse record {|
 |};
 
 # Unauthorized Response record type
-type UnauthorizedResponse record {|
+public type UnauthorizedResponse record {|
     *http:Unauthorized;
     # payload 
     record {|
@@ -46,7 +46,7 @@ type UnauthorizedResponse record {|
 |};
 
 # VerificationEmailRequest is used to send a verification email
-type VerificationEmailRequest record {|
+public type VerificationEmailRequest record {|
     # The recipient's email address
     string to;
     # The subject of the email
@@ -57,18 +57,8 @@ type VerificationEmailRequest record {|
     string verificationLink;
 |};
 
-# SmtpCredentials is used to store SMTP server credentials
-type SmtpCredentials record {|
-    # The SMTP server host
-    string host;
-    # The username for SMTP authentication
-    string username;
-    # The password for SMTP authentication
-    string password;
-|};
-
 # VerificationEmailResponse record type
-type VerificationEmailResponse record {|
+public type VerificationEmailResponse record {|
     *http:Ok;
     # payload
     record {|
