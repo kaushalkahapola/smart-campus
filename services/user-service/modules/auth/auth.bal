@@ -1,153 +1,45 @@
-import ballerina/crypto;
-import ballerina/time;
-import ballerina/mime;
-import ballerina/io;
+import ballerina/http;
 import ballerina/log;
-import ballerina/jwt;
 
-configurable string salt = ?;
-configurable string keystorePath = ?;
-configurable string keystoreAlias = ?;
-configurable string keystorePassword = ?;
-configurable IssuerConfig issuerConfig = {
-    username: "finmate",
-    issuer: "finmate",
-    audience: "finmate-clients",
-    expTime: 3600
-};
+# Interceptor to handle authentication
+public isolated service class AuthInterceptor {
+    *http:RequestInterceptor;
 
-# Loads the private key from the keystore.
-# + return - the private key if successfully loaded, or an error if loading fails
-isolated function loadPrivateKeyFromKeystore() returns crypto:PrivateKey|error {
-    crypto:KeyStore keystore = {
-        path: keystorePath,
-        password: keystorePassword
-    };
-    return crypto:decodeRsaPrivateKeyFromKeyStore(keystore, keystoreAlias, keystorePassword);
-}
-
-# Loads the public key from the keystore.
-# + return - the public key if successfully loaded, or an error if loading fails
-isolated function loadPublicKeyFromKeystore() returns crypto:PublicKey|error {
-    crypto:TrustStore trustStore = {
-        path: keystorePath,
-        password: keystorePassword
-    };
-    return crypto:decodeRsaPublicKeyFromTrustStore(trustStore, keystoreAlias);
-}
-
-# Hashes a password using SHA-256 and a configurable salt.
-# + password - the password to hash
-# + return - the hashed password as a Base16 string, or an error if hashing fails
-public isolated function hashPassword(string password) returns string|error {
-    byte[] passwordBytes = password.toBytes();
-    byte[] hashedBytes = crypto:hashSha256(passwordBytes, salt.toBytes());
-    return hashedBytes.toBase16();
-}
-
-# Creates a signed verification token: `userId:timestamp.signatureBase64`
-# + userId - the ID of the user to create the token for
-# + return - the signed token as a string, or an error if signing fails
-public isolated function createVerificationToken(string userId) returns string|error {
-    crypto:PrivateKey privateKey = check loadPrivateKeyFromKeystore();
-    time:Utc exp = time:utcAddSeconds(time:utcNow(), 3600); // 1 hour expiry
-    string payload = userId + ":" + time:utcToString(exp);
-    byte[] payloadBytes = payload.toBytes();
-    byte[] signature = check crypto:signRsaSha256(payloadBytes, privateKey);
-    string signatureBase64 = signature.toBase64();
-
-    return payload + "." + signatureBase64;
-}
-
-# Verifies a signed token and checks expiry.
-# + token - the token to verify, formatted as `userId:timestamp.signatureBase64`
-# + return - true if the token is valid, false if invalid or expired, or an error if verification fails 
-public isolated function verifyToken(string token) returns string|error {
-    crypto:PublicKey publicKey = check loadPublicKeyFromKeystore();
-    int? dotIndex = token.lastIndexOf(".");
-    if dotIndex == () {
-        return error("Invalid token format");
-    }
-
-    string payload = token.substring(0, dotIndex);
-    string encodedSignature = token.substring(dotIndex + 1);
-
-    byte[] payloadBytes = payload.toBytes();
-    byte[] encodedSignatureBytes = encodedSignature.toBytes();
-
-    string|byte[]|io:ReadableByteChannel signature = check mime:base64Decode(encodedSignatureBytes);
-    if signature is string | io:ReadableByteChannel | error {
-        return error("Invalid token signature");
-    }
-
-    boolean isValid = check crypto:verifyRsaSha256Signature(payloadBytes, signature, publicKey);
-    if !isValid {
-        return error("Signature verification failed");
-    }
-
-    // Extract userId and timestamp from payload
-    int? columnIndex = payload.indexOf(":");
-    if columnIndex == () {
-        return error("Invalid token payload format");
-    }
-
-    string userId = payload.substring(0, columnIndex);
-    string timestamp = payload.substring(columnIndex + 1);
-    log:printInfo("User ID: " + userId);
-
-    time:Utc exp = check time:utcFromString(timestamp);
-
-    if time:utcNow() > exp {
-        return error("Token expired");
-    }
-
-    return userId;
-}
-
-# Generates a JWT token for the user.
-# + userId - the ID of the user to generate the token for
-# + username - the username of the user
-# + role - the role of the user
-# + email - the email of the user
-# + return - the generated JWT token as a string, or an error if token generation fails
-public isolated function generateJwtToken(string userId, string username, string role, string email) returns string|error {
-    jwt:IssuerConfig config = {
-        username: issuerConfig.username,
-        issuer: issuerConfig.issuer,
-        audience: issuerConfig.audience,
-        customClaims: {
-            "username": username,
-            "email": email,
-            "userId": userId,
-            "role": role
-        },
-        signatureConfig: {   
-            config: {
-                keyStore: {
-                    path: keystorePath,
-                    password: keystorePassword
-                },
-                keyAlias: keystoreAlias,
-                keyPassword: keystorePassword
-            }
+    # This function intercepts incoming requests to validate JWT tokens.
+    # 
+    # + ctx - The HTTP request context
+    # + req - The HTTP request
+    # + return - Returns an HTTP response indicating whether the request is authorized or not
+    isolated resource function default [string... path](http:RequestContext ctx, http:Request req)
+        returns http:NextService|http:Forbidden|http:InternalServerError|error? {
+        
+        // Extract Authorization header
+        string|http:HeaderNotFoundError authHeader = req.getHeader("Authorization");
+        if (authHeader is http:HeaderNotFoundError) {
+            log:printError("Missing Authorization header");
+            return createUnauthorizedResponse("Missing Authorization header");
         }
-    };
+        
+        // Validate Bearer token format
+        if (!authHeader.startsWith("Bearer ")) {
+            log:printError("Invalid Authorization header format");
+            return createUnauthorizedResponse("Invalid Authorization header format");
+        }
+        
+        // Extract access token
+        string accessToken = authHeader.substring(7); // Remove "Bearer " prefix
 
-    string jwtToken = check jwt:issue(config);
+        // Validate access token
+        boolean|error isvalid = validateToken(accessToken);
+        if (isvalid is error) {
+            log:printError("Token validation failed: " + isvalid.message());
+            return createUnauthorizedResponse("Invalid or expired token");
+        }
+        log:printInfo("M2M Token validation successful");
 
-    return jwtToken;
-}
+        ctx.set("m2mToken", accessToken);
 
-# Validate the user with email and password
-# + email - Email of the user
-# + hashedPassword - Hashed password of the user
-# + password - Password from reqest
-# + return - return the validated user
-public isolated function validateUser(string email, string hashedPassword, string password ) 
-    returns boolean|error {
-    string newHashedPassword = check hashPassword(password);
-    if hashedPassword !== newHashedPassword {
-        return error("Password do not match");
+        // Continue to the next service
+        return ctx.next();
     }
-    return true;
 }

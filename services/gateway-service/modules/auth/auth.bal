@@ -18,56 +18,54 @@ public isolated service class AuthInterceptor {
         string requestPath = req.rawPath;
         
         // Public endpoints that don't require authentication
-        if (isPublicEndpoint(requestPath)) {
-            return ctx.next();
-        }
-        
-        // Extract Authorization header
-        string|http:HeaderNotFoundError authHeader = req.getHeader("Authorization");
-        if (authHeader is http:HeaderNotFoundError) {
-            log:printError("Missing Authorization header");
-            return createUnauthorizedResponse("Missing Authorization header");
-        }
-        
-        // Validate Bearer token format
-        if (!authHeader.startsWith("Bearer ")) {
-            log:printError("Invalid Authorization header format");
-            return createUnauthorizedResponse("Invalid Authorization header format");
-        }
-        
-        // Extract access token
-        string accessToken = authHeader.substring(7); // Remove "Bearer " prefix
-
-        // Validate access token
-        boolean|error isvalid = validateToken(accessToken);
-        if (isvalid is error) {
-            log:printError("Token validation failed: " + isvalid.message());
-            return createUnauthorizedResponse("Invalid or expired token");
-        }
-        log:printInfo("Token validation successful");
-        json|error jwtPayload = getCachedUserInfo(accessToken);
-        if (jwtPayload is error) {
-            log:printError("JWT validation failed: " + jwtPayload.message());
-            return createUnauthorizedResponse("Invalid JWT token");
-        }
-
-        // Add user information to request context for downstream services
-        if (jwtPayload is map<json>) {
-            json|error username = jwtPayload["username"];
-            json|error userId = jwtPayload["sub"];
-            if (username is string && userId is string) {
-                ctx.set("username", username);
-                ctx.set("userId", userId);
-            } else {
-                log:printError("Username not found or invalid in JWT payload");
-                return createUnauthorizedResponse("Invalid JWT payload");
+        if (!isPublicEndpoint(requestPath)) {
+            // Extract Authorization header
+            string|http:HeaderNotFoundError authHeader = req.getHeader("Authorization");
+            if (authHeader is http:HeaderNotFoundError) {
+                log:printError("Missing Authorization header");
+                return createUnauthorizedResponse("Missing Authorization header");
             }
-        } else {
-            log:printError("JWT payload is not a valid map");
-            return createUnauthorizedResponse("Invalid JWT payload format");
-        }
+            
+            // Validate Bearer token format
+            if (!authHeader.startsWith("Bearer ")) {
+                log:printError("Invalid Authorization header format");
+                return createUnauthorizedResponse("Invalid Authorization header format");
+            }
+            
+            // Extract access token
+            string accessToken = authHeader.substring(7); // Remove "Bearer " prefix
 
-        log:printInfo("User authenticated successfully: ");
+            // Validate access token
+            boolean|error isvalid = validateToken(accessToken);
+            if (isvalid is error) {
+                log:printError("Token validation failed: " + isvalid.message());
+                return createUnauthorizedResponse("Invalid or expired token");
+            }
+            log:printInfo("Token validation successful");
+            json|error jwtPayload = getCachedUserInfo(accessToken);
+            if (jwtPayload is error) {
+                log:printError("JWT validation failed: " + jwtPayload.message());
+                return createUnauthorizedResponse("Invalid JWT token");
+            }
+
+            // Add user information to request context for downstream services
+            if (jwtPayload is map<json>) {
+                json|error username = jwtPayload["username"];
+                json|error userId = jwtPayload["sub"];
+                if (username is string && userId is string) {
+                    ctx.set("username", username);
+                    ctx.set("userId", userId);
+                } else {
+                    log:printError("Username not found or invalid in JWT payload");
+                    return createUnauthorizedResponse("Invalid JWT payload");
+                }
+            } else {
+                log:printError("JWT payload is not a valid map");
+                return createUnauthorizedResponse("Invalid JWT payload format");
+            }
+
+            log:printInfo("User authenticated successfully: ");
+        }
 
         // Generate a new access token for M2M communication using cache
         string m2mToken = check getCachedM2MToken();
