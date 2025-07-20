@@ -45,17 +45,7 @@ public type UnauthorizedResponse record {|
     |} body;
 |};
 
-# VerificationEmailRequest is used to send a verification email
-public type VerificationEmailRequest record {|
-    # The recipient's email address
-    string to;
-    # The subject of the email
-    string subject;
-    # The body of the email in plain text 
-    string body;
-    # The verificaiton URL
-    string verificationLink;
-|};
+
 
 # VerificationEmailResponse record type
 public type VerificationEmailResponse record {|

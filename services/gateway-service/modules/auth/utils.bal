@@ -1,6 +1,4 @@
 import ballerina/http;
-// import ballerina/jwt;
-// import ballerina/oauth2;
 import ballerina/log;
 import ballerina/url;
 import ballerina/time;

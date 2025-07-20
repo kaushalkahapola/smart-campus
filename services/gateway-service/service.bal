@@ -1,7 +1,7 @@
 import ballerina/http;
+import ballerina/log;
 
 import gateway_service.auth;
-import ballerina/log;
 
 # Interceptor to handle errors in the response
 service class ErrorInterceptor {

@@ -1,5 +1,4 @@
 import ballerina/http;
-// import ballerina/jwt;
 import ballerina/log;
 
 # Interceptor to handle authentication

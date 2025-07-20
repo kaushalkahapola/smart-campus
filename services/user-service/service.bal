@@ -2,7 +2,6 @@ import user_service.auth;
 
 import ballerina/http;
 import ballerina/log;
-configurable string gatewayUrl = "http://localhost:9090"; 
 
 # Interceptor to handle errors in the response
 service class ErrorInterceptor {
