@@ -8,6 +8,7 @@ service class ErrorInterceptor {
     *http:ResponseErrorInterceptor;
 
     # This function intercepts errors in the response and handles them.
+    # 
     # + err - The error that occurred during the response
     # + ctx - The HTTP request context
     # + return - Returns an HTTP BadRequest response with a custom error message
