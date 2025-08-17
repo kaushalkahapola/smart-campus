@@ -1,0 +1,6 @@
+[gateway_service.auth]
+M2MClientId=
+M2MClientSecret =
+authProviderURL = 
+clientId =
+clientSecret = 
