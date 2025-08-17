@@ -1,6 +1,12 @@
 import ballerina/http;
 import ballerina/log;
 
+public configurable AppRoles authorizedRoles = {
+    Admin: "admin",
+    Staff: "staff",
+    Student: "student"
+};
+
 # Interceptor to handle authentication
 public isolated service class AuthInterceptor {
     *http:RequestInterceptor;
@@ -46,14 +52,24 @@ public isolated service class AuthInterceptor {
                 log:printError("JWT validation failed: " + jwtPayload.message());
                 return createUnauthorizedResponse("Invalid JWT token");
             }
+            log:printInfo("JWT payload retrieved: " + jwtPayload.toString());
 
             // Add user information to request context for downstream services
             if (jwtPayload is map<json>) {
                 json|error username = jwtPayload["username"];
                 json|error userId = jwtPayload["sub"];
+                json|error groups = jwtPayload["groups"]; // Asgardeo roles come in 'groups' claim
+                
                 if (username is string && userId is string) {
                     ctx.set("username", username);
                     ctx.set("userId", userId);
+                    
+                    // Set user groups for downstream services
+                    if (groups is json[]) {
+                        ctx.set("userGroups", groups.toString());
+                    } else {
+                        ctx.set("userGroups", "[]"); // Empty array string if no groups
+                    }
                 } else {
                     log:printError("Username not found or invalid in JWT payload");
                     return createUnauthorizedResponse("Invalid JWT payload");

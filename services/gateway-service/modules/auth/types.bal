@@ -21,3 +21,9 @@ isolated TokenCache? cachedM2MToken = ();
 
 # Global variable to store the cached user info
 isolated UserInfoCache? cachedUserInfo = ();
+
+public type AppRoles record {|
+    string Admin ;
+    string Staff ;
+    string Student ;
+|};

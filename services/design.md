@@ -18,6 +18,7 @@ The Smart Campus Resource Management Platform follows a microservices architectu
 │              ┌─────────────────────────────────┐                │
 │              │     API Gateway & Router        │                │
 │              │   - OAuth2 Token Validation     │                │
+│              │   - Campus Role Authorization   │                │
 │              │   - Request Routing             │                │
 │              │   - Rate Limiting               │                │
 │              │   - Error Handling              │                │
@@ -26,13 +27,15 @@ The Smart Campus Resource Management Platform follows a microservices architectu
           │         │         │         │         │
           ▼         ▼         ▼         ▼         ▼
 ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
-│ User Service│ │Account Svc  │ │Transaction  │ │Analytics    │ │Notification │
-│ (Port 9092) │ │(Port 9093)  │ │Svc(Port 9094│ │Svc(Port 9095│ │Svc(Port 9091│
+│ User Service│ │Resource Svc │ │Booking Svc  │ │AI Service   │ │Notification │
+│ (Port 9092) │ │(Port 9093)  │ │(Port 9094)  │ │(Port 9096)  │ │Svc(Port 9091│
 │             │ │             │ │             │ │             │ │             │
-│- Registration│ │- Account    │ │- Transfers  │ │- Spending   │ │- Email/SMS  │
-│- Login/Auth │ │  Management │ │- History    │ │  Analysis   │ │- WebSocket  │
-│- Profile    │ │- Balance    │ │- Validation │ │- Fraud      │ │- Kafka      │
-│- JWT Tokens │ │- Bank APIs  │ │- Scheduling │ │  Detection  │ │  Consumer   │
+│- Campus     │ │- Resource   │ │- Smart      │ │- Pinecone   │ │- Email/SMS  │
+│  Registration│ │  Management │ │  Booking    │ │  AI Recs    │ │- WebSocket  │
+│- Profile    │ │- Availability│ │- Conflict   │ │- Usage      │ │- Kafka      │
+│- JWT Tokens │ │- Features   │ │  Detection  │ │  Patterns   │ │  Consumer   │
+│- Department │ │- Maintenance│ │- Waitlist   │ │- Predictions│ │- Campus     │
+│  Management │ │- Multi-loc  │ │- Bulk Ops   │ │- Analytics  │ │  Alerts     │
 └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘
       │               │               │               │               │
       └───────────────┼───────────────┼───────────────┼───────────────┘
@@ -43,9 +46,10 @@ The Smart Campus Resource Management Platform follows a microservices architectu
 │                      (Event Streaming)                         │
 │                                                                 │
 │  Topics:                                                        │
-│  • user-events        • transaction-events                     │
-│  • account-events     • notification-events                    │
-│  • fraud-alerts       • audit-events                           │
+│  • user-events        • booking-events                         │
+│  • resource-events    • notification-events                    │
+│  • ai-prediction      • maintenance-events                     │
+│  • audit-events       • waitlist-events                        │
 └─────────────────────────────────────────────────────────────────┘
                       │
                       ▼
@@ -53,12 +57,13 @@ The Smart Campus Resource Management Platform follows a microservices architectu
 │                     Data Layer                                 │
 │                                                                 │
 │  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐ │
-│  │   MySQL/PostgreSQL   │    Redis Cache    │  │  External   │ │
-│  │                 │    │                 │    │  Bank APIs  │ │
+│  │   MySQL Campus DB   │    Redis Cache    │  │  Pinecone   │ │
+│  │                 │    │                 │    │  Vector DB  │ │
 │  │ • Users         │    │ • Sessions      │    │             │ │
-│  │ • Accounts      │    │ • Tokens        │    │ • PSD2      │ │
-│  │ • Transactions  │    │ • Rate Limits   │    │ • Account   │ │
-│  │ • Notifications │    │ • Temp Data     │    │   Data      │ │
+│  │ • Resources     │    │ • Tokens        │    │ • AI        │ │
+│  │ • Bookings      │    │ • Rate Limits   │    │   Patterns  │ │
+│  │ • Notifications │    │ • Availability  │    │ • ML Models │ │
+│  │ • Analytics     │    │ • User Prefs    │    │ • Vectors   │ │
 │  └─────────────────┘    └─────────────────┘    └─────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
                       │
@@ -107,18 +112,19 @@ service http:InterceptableService /api on new http:Listener(9090) {
 
 ### 2. User Service (Port 9092)
 
-**Role**: User management and authentication
+**Role**: Campus user management and authentication
 
 **Database Schema**:
 ```sql
 CREATE TABLE users (
     id VARCHAR(100) PRIMARY KEY,
     username VARCHAR(50) UNIQUE,
-    hashed_password VARCHAR(255),
     email VARCHAR(100) UNIQUE,
-    role ENUM('user', 'admin'),
+    role ENUM('student', 'staff', 'admin') DEFAULT 'student',
+    department VARCHAR(100),
+    student_id VARCHAR(20),
     is_verified BOOLEAN DEFAULT FALSE,
-    is_active BOOLEAN DEFAULT FALSE,
+    is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP,
     updated_at TIMESTAMP,
     last_login TIMESTAMP
@@ -136,105 +142,95 @@ service http:InterceptableService / on new http:Listener(9092) {
 ```
 
 **Key Features**:
-- User registration with email verification
-- OAuth2 password grant flow for authentication
-- JWT token generation (access + refresh tokens)
-- Role-based access control (customer, admin, support)
-- User profile management
+- Campus user registration with university email verification
+- OAuth2 authentication with Asgardeo integration
+- JWT token generation and validation
+- Role-based access control (student, staff, admin)
+- Department-based user management
+- Campus profile management with preferences
 
-### 3. Account Service (Port 9093)
+### 3. Resource Service (Port 9093)
 
-**Role**: Bank account management and external bank integration
+**Role**: Campus resource management and availability tracking
 
 **Database Schema**:
 ```sql
-CREATE TABLE accounts (
+CREATE TABLE resources (
+    id VARCHAR(100) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    type ENUM('lecture_hall', 'computer_lab', 'meeting_room', 'study_room', 'equipment', 'vehicle'),
+    capacity INT DEFAULT 1,
+    features JSON,
+    location VARCHAR(255),
+    building VARCHAR(100),
+    floor VARCHAR(10),
+    room_number VARCHAR(20),
+    status ENUM('available', 'maintenance', 'unavailable', 'reserved'),
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+```
+
+**Key Features**:
+- **Campus Resource Registration**: Lecture halls, labs, meeting rooms, equipment
+- **Real-time Availability Tracking**: Live status updates for all resources
+- **Feature Management**: AV equipment, accessibility, software capabilities
+- **Multi-location Support**: Multiple buildings and campus locations
+- **Maintenance Scheduling**: Track and schedule resource maintenance
+- **Search and Filtering**: Advanced resource discovery with filters
+
+### 4. Booking Service (Port 9094)
+
+**Role**: Intelligent booking management and conflict resolution
+
+**Database Schema**:
+```sql
+CREATE TABLE bookings (
     id VARCHAR(100) PRIMARY KEY,
     user_id VARCHAR(100),
-    account_number VARCHAR(50) UNIQUE,
-    account_type ENUM('savings', 'checking', 'credit'),
-    balance DECIMAL(15,2),
-    currency VARCHAR(3) DEFAULT 'USD',
-    status ENUM('active', 'frozen', 'closed'),
-    bank_id VARCHAR(100),
-    external_account_id VARCHAR(100),
+    resource_id VARCHAR(100),
+    title VARCHAR(255),
+    description TEXT,
+    start_time TIMESTAMP,
+    end_time TIMESTAMP,
+    status ENUM('pending', 'confirmed', 'in_progress', 'completed', 'cancelled', 'no_show'),
+    purpose VARCHAR(100),
+    attendees_count INT,
     created_at TIMESTAMP,
     updated_at TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (resource_id) REFERENCES resources(id)
 );
 ```
 
 **Key Features**:
-- Create and manage **virtual demo accounts**
-- **Mock balance inquiries** with realistic banking scenarios
-- **Account status management** (demo freeze/unfreeze)
-- **Simulated bank data** stored locally for demo purposes
-- Multi-currency support for **international demo scenarios**
+- **Smart Booking Creation**: AI-powered conflict detection and resolution
+- **Real-time Conflict Management**: Automatic detection and alternative suggestions
+- **Recurring Bookings**: Schedule recurring events with pattern recognition
+- **Waitlist Management**: Automated waitlist with priority-based allocation
+- **Bulk Operations**: Administrative bulk booking capabilities
+- **Event Integration**: Kafka event emission for booking lifecycle
 
-### 4. Transaction Service (Port 9094)
+### 5. AI Service (Port 9096) ⭐ **Innovation Highlight**
 
-**Role**: Financial transaction processing and management
+**Role**: AI-powered recommendations and predictive analytics
 
-**Database Schema**:
-```sql
-CREATE TABLE transactions (
-    id VARCHAR(100) PRIMARY KEY,
-    from_account_id VARCHAR(100),
-    to_account_id VARCHAR(100),
-    amount DECIMAL(15,2),
-    currency VARCHAR(3),
-    transaction_type ENUM('transfer', 'payment', 'deposit', 'withdrawal'),
-    status ENUM('pending', 'processing', 'completed', 'failed', 'cancelled'),
-    reference_number VARCHAR(100) UNIQUE,
-    description TEXT,
-    scheduled_at TIMESTAMP,
-    processed_at TIMESTAMP,
-    created_at TIMESTAMP,
-    FOREIGN KEY (from_account_id) REFERENCES accounts(id),
-    FOREIGN KEY (to_account_id) REFERENCES accounts(id)
-);
-```
+**Integration**:
+- **Pinecone Vector Database**: Store and query booking behavior embeddings
+- **Machine Learning Models**: Pattern recognition and demand prediction
+- **Real-time Analytics**: Usage optimization and recommendation engine
 
 **Key Features**:
-- **Virtual fund transfers** using demo currency/points
-- **Realistic transaction processing** with mock validation
-- Real-time transaction status tracking
-- **Demo-friendly transaction history** with sample data
-- Scheduled payments simulation
-- Event emission to Kafka for **live demo notifications**
-
-### 5. Analytics Service (Port 9095)
-
-**Role**: Transaction analytics and insights
-
-**Database Schema**:
-```sql
-CREATE TABLE analytics_summaries (
-    id VARCHAR(100) PRIMARY KEY,
-    user_id VARCHAR(100),
-    period_type ENUM('daily', 'weekly', 'monthly', 'yearly'),
-    period_start DATE,
-    period_end DATE,
-    total_income DECIMAL(15,2),
-    total_expenses DECIMAL(15,2),
-    transaction_count INT,
-    category_breakdown JSON,
-    created_at TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
-```
-
-**Key Features**:
-- **Demo spending analysis** and categorization
-- Income vs expense trends with **sample financial data**
-- Monthly/yearly financial summaries for **presentation**
-- **Simple pattern detection** for suspicious activity demo
-- Real-time dashboard data for **live competition demo**
-- Export capabilities (PDF/CSV) with **sample reports**
+- **Usage Pattern Analysis**: Vector embeddings for booking behavior analysis
+- **Smart Recommendations**: AI-powered alternative resource and time suggestions
+- **Predictive Analytics**: Forecast resource demand and optimize allocation
+- **Anomaly Detection**: Identify unusual usage patterns and potential issues
+- **Similarity Matching**: Find similar booking patterns and user preferences
+- **Optimization Engine**: Continuous learning for resource utilization
 
 ### 6. Notification Service (Port 9091)
 
-**Role**: Multi-channel notification delivery
+**Role**: Multi-channel notification delivery for campus events
 
 **Current Implementation**:
 ```ballerina
@@ -251,25 +247,26 @@ service on new http:Listener(9091) {
 CREATE TABLE notifications (
     id VARCHAR(100) PRIMARY KEY,
     user_id VARCHAR(100),
-    type ENUM('email', 'sms', 'push', 'websocket'),
-    channel ENUM('transaction', 'security', 'marketing', 'system'),
-    subject VARCHAR(255),
+    type ENUM('booking_confirmation', 'booking_reminder', 'booking_cancelled', 'maintenance_alert', 'system_announcement'),
+    channel ENUM('email', 'websocket', 'push'),
+    title VARCHAR(255),
     message TEXT,
     status ENUM('pending', 'sent', 'delivered', 'failed'),
     scheduled_at TIMESTAMP,
     sent_at TIMESTAMP,
-    delivered_at TIMESTAMP,
+    booking_id VARCHAR(100),
     metadata JSON,
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (booking_id) REFERENCES bookings(id)
 );
 ```
 
 **Key Features**:
-- Email notifications (SMTP) for **demo email accounts**
-- **WebSocket real-time notifications** for live presentation
-- **Kafka event consumer** for demo event processing
-- **Demo notification preferences** management
-- **Competition-friendly messaging** (no SMS costs)
+- **Campus Email Notifications**: Booking confirmations and reminders
+- **WebSocket Real-time Updates**: Live booking status for campus users
+- **Kafka Event Consumer**: Campus event processing and notification triggers
+- **Campus Notification Preferences**: Student/staff notification management
+- **Admin Alert System**: System-wide notifications for campus administrators
 
 ### Security Architecture
 
@@ -293,12 +290,13 @@ CREATE TABLE notifications (
 
 ### Authorization Model
 - **Token-based**: JWT tokens validated against Asgardeo
-- **Asgardeo Integration**: Complete OAuth2 flow with identity provider
-- **Role-based Access Control (RBAC)**: Roles stored in Asgardeo user profile
-  - `customer`: Own data access only
-  - `admin`: Full system access
-  - `support`: Limited user data for support operations
+- **Asgardeo Integration**: Complete OAuth2 flow with university identity provider
+- **Role-based Access Control (RBAC)**: Campus roles stored in Asgardeo user groups
+  - `student`: Own bookings and resource viewing access
+  - `staff`: Department resource management and student booking oversight
+  - `admin`: Full campus system access and administration
 - **Token Caching**: User info and M2M tokens cached for performance
+- **M2M Authentication**: Service-to-service communication via M2M tokens
 
 ### Security Headers
 ```

@@ -5,12 +5,12 @@ USE campus_resource_db;
 
 -- Create users table for campus users (students, staff, admin)
 -- This table stores user information including campus-specific details like department and student ID
--- Role-based access control: student, staff, admin, system
+-- Role-based access control: student, staff, admin (system operations use M2M tokens)
 CREATE TABLE users (
     id VARCHAR(100) NOT NULL PRIMARY KEY UNIQUE,
     username VARCHAR(50) NOT NULL UNIQUE,
     email VARCHAR(100) NOT NULL UNIQUE,
-    role ENUM('student', 'staff', 'admin', 'system') DEFAULT 'student',
+    role ENUM('student', 'staff', 'admin') DEFAULT 'student',
     department VARCHAR(100) NULL,
     student_id VARCHAR(20) NULL,
     preferences JSON NULL,
@@ -217,8 +217,7 @@ INSERT INTO users (id, username, email, role, department, student_id, is_verifie
 ('user_001', 'john.doe', 'john.doe@university.edu', 'student', 'Computer Science', 'CS2021001', TRUE, TRUE),
 ('user_002', 'jane.smith', 'jane.smith@university.edu', 'student', 'Engineering', 'EN2021002', TRUE, TRUE),
 ('user_003', 'prof.wilson', 'prof.wilson@university.edu', 'staff', 'Computer Science', NULL, TRUE, TRUE),
-('user_004', 'admin.campus', 'admin@university.edu', 'admin', 'Administration', NULL, TRUE, TRUE),
-('user_005', 'ai.system', 'system@university.edu', 'system', 'IT', NULL, TRUE, TRUE);
+('user_004', 'admin.campus', 'admin@university.edu', 'admin', 'Administration', NULL, TRUE, TRUE);
 
 -- Sample resources (lecture halls, labs, meeting rooms)
 INSERT INTO resources (id, name, type, capacity, features, location, building, floor, room_number, status, description) VALUES

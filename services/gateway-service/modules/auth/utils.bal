@@ -119,6 +119,7 @@ isolated function getCachedUserInfo(string token) returns json|error {
         }
 
         json userInfo = check response.getJsonPayload();
+        log:printInfo("User info retrieved: " + userInfo.toString());
         int currentTime = time:utcNow()[0];
         
         // Cache the user info for 10 minutes (600 seconds)
@@ -240,4 +241,62 @@ isolated function clearAllCaches() {
         cachedM2MToken = ();
     }
     log:printInfo("All caches cleared");
+}
+
+# Creates a forbidden HTTP response for campus access denial
+# + message - The error message to include in the response
+# + return - An HTTP Forbidden response with the error message
+isolated function createForbiddenResponse(string message) returns http:Forbidden {
+    http:Forbidden forbiddenResponse = {
+        body: {
+            "error": "Campus Access Forbidden",
+            "message": message,
+            "details": "Contact campus IT support if you believe this is an error"
+        }
+    };
+    return forbiddenResponse;
+}
+
+# Flexible RBAC function that checks if user has any of the required groups
+# + userGroups - The user's groups as a string (JSON array format)
+# + requiredGroups - Array of groups that have access to the resource
+# + return - true if user has any of the required groups, false otherwise
+public isolated function hasRequiredAccess(string userGroups, string[] requiredGroups) returns boolean {
+    // If no groups required, allow access
+    if (requiredGroups.length() == 0) {
+        return true;
+    }
+    
+    // Check if user has any of the required groups
+    foreach string requiredGroup in requiredGroups {
+        if (userGroups.includes(requiredGroup)) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+# Campus-specific department access control
+# + role - The user's campus role
+# + userDepartment - The user's department
+# + resourceDepartment - The resource's department
+# + return - true if access is allowed, false otherwise
+isolated function hasDepartmentAccess(string role, string userDepartment, string resourceDepartment) returns boolean {
+    match role {
+        "admin" => {
+            return true; // Campus admin can access all departments
+        }
+        "staff" => {
+            // Staff can access their own department resources and general campus resources
+            return userDepartment == resourceDepartment || resourceDepartment == "general";
+        }
+        "student" => {
+            // Students can access their department resources and general campus resources
+            return userDepartment == resourceDepartment || resourceDepartment == "general";
+        }
+        _ => {
+            return false;
+        }
+    }
 }

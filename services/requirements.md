@@ -13,7 +13,7 @@
 - **Student/Staff Registration**: Register campus users with university email verification (via Asgardeo)
 - **Role-Based Login**: OAuth2-based authentication with student/staff/admin roles (Asgardeo integration)
 - **Profile Management**: View and update campus profiles with preferences
-- **Advanced RBAC**: Support for student, staff, admin, and system roles with Asgardeo group mapping
+- **Advanced RBAC**: Support for student, staff, and admin roles with Asgardeo group mapping
 - **Campus Email Verification**: Verify university email addresses during registration
 - **Token Management**: JWT token validation, caching, and M2M token generation
 - **Asgardeo Integration**: Complete OAuth2 flow with university identity provider
@@ -70,7 +70,7 @@
 
 ### 1. Security
 - **OAuth2 Implementation**: Asgardeo-based secure token authentication with university integration
-- **Advanced RBAC**: Role-based authorization with Asgardeo group claims (student, staff, admin, system)
+- **Advanced RBAC**: Role-based authorization with Asgardeo group claims (student, staff, admin)
 - **JWT Token Management**: Access token validation with caching and M2M token generation
 - **Data Protection**: Encrypt sensitive campus data at rest and in transit
 - **HTTPS/TLS**: All communications over HTTPS for campus security compliance
@@ -151,7 +151,6 @@
 - **student**: Regular campus user (own bookings and basic resource access)
 - **staff**: Faculty/staff member (department resources and advanced booking)
 - **admin**: Campus administrator (full system access and management)
-- **system**: AI service and automated system operations
 
 #### Core Entities
 - **User**: id, email, role, department, preferences, verification_status
