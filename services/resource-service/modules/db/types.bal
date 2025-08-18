@@ -119,7 +119,7 @@ public type AddResource record {|
     @sql:Column {
         name: "type"
     }
-    string 'type; 
+    ResourceType 'type; 
     # Resource capacity
 	int capacity?;
 	# Resource features
