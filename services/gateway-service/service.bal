@@ -85,27 +85,41 @@ service http:InterceptableService /api on new http:Listener(9090) {
         return caller->respond(adminData);
     }
 
-    # Staff only endpoint - Test staff access  
-    # 
+    # List all users with filtering - Admin and Staff only
     # + ctx - The HTTP request context
     # + caller - The HTTP caller to respond to.
-    # + return - Returns a response with staff data
-    resource function get admin/users(http:RequestContext ctx, http:Caller caller) returns error? {
+    # + req - The HTTP request
+    # + return - Returns list of users
+    resource function get admin/users(http:RequestContext ctx, http:Caller caller, http:Request req) returns error? {
         
-        // Check RBAC: Only admin and staff can access user management
+        // Check RBAC: Only admin and staff can list users
         string userGroups = ctx.get("userGroups").toString();
         string[] requiredGroups = [auth:authorizedRoles.Admin, auth:authorizedRoles.Staff];
         if (!auth:hasRequiredAccess(userGroups, requiredGroups)) {
             log:printError("Access denied: Admin or staff access required for user management");
-            return caller->respond(createForbiddenError("Admin or staff access required to view user management"));
+            return caller->respond(createForbiddenError("Admin or staff access required to view users"));
         }
         
-        json staffData = {
-            "message": "Staff User Management Access Granted", 
-            "data": "Student and user data access",
-            "timestamp": time:utcNow()[0]
+        // Prepare headers for the user service call
+        map<string> headers = {
+            "X-User-Id": ctx.get("userId").toString(),
+            "X-Username": ctx.get("username").toString(),
+            "X-User-Groups": ctx.get("userGroups").toString(),
+            "Authorization": "Bearer " + ctx.get("m2mToken").toString()
         };
-        return caller->respond(staffData);
+
+        // Forward query parameters to user service
+        string queryParams = req.rawPath.includes("?") ? req.rawPath.substring(<int>req.rawPath.indexOf("?")) : "";
+        string userPath = "/admin/users" + queryParams;
+
+        log:printInfo("Forwarding GET /admin/users request to user service: " + userPath);
+        http:Response|error response = userServiceClient->get(userPath, headers = headers);
+        if response is http:Response {
+            return caller->respond(response);
+        } else {
+            log:printError("Error calling user service: " + response.message());
+            return caller->respond(createInternalServerError());
+        }
     }
 
     # Resource endpoints - Accessible to all authenticated users
@@ -153,25 +167,28 @@ service http:InterceptableService /api on new http:Listener(9090) {
         return caller->respond(aiData);
     }
 
-    # Student profile endpoint - Should work for students accessing their own data
-    # 
+    # Get current user profile - Accessible to all authenticated users
     # + ctx - The HTTP request context
     # + caller - The HTTP caller to respond to.
-    # + return - Returns user profile
+    # + return - Returns current user's profile
     resource function get user/me(http:RequestContext ctx, http:Caller caller) returns error? {
-        json profileData = {
-            "message": "User Profile Access Granted",
-            "userId": ctx.get("userId").toString(),
-            "username": ctx.get("username").toString(),
-            "userGroups": ctx.get("userGroups").toString(),
-            "profile": {
-                "department": "Computer Science",
-                "studentId": "CS2021001",
-                "email": "student@university.edu"
-            },
-            "timestamp": time:utcNow()[0]
+        
+        // Prepare headers for the user service call
+        map<string> headers = {
+            "X-User-Id": ctx.get("userId").toString(),
+            "X-Username": ctx.get("username").toString(),
+            "X-User-Groups": ctx.get("userGroups").toString(),
+            "Authorization": "Bearer " + ctx.get("m2mToken").toString()
         };
-        return caller->respond(profileData);
+
+        log:printInfo("Forwarding GET /user/me request to user service");
+        http:Response|error response = userServiceClient->get("/users/me", headers = headers);
+        if response is http:Response {
+            return caller->respond(response);
+        } else {
+            log:printError("Error calling user service: " + response.message());
+            return caller->respond(createInternalServerError());
+        }
     }
 
     # Analytics endpoint - Should be accessible to staff and admin
@@ -517,6 +534,258 @@ service http:InterceptableService /api on new http:Listener(9090) {
             return caller->respond(response);
         } else {
             log:printError("Error calling resource service health endpoint: " + response.message());
+            return caller->respond(createInternalServerError());
+        }
+    }
+
+    # ===============================================
+    # USER SERVICE ENDPOINTS - University User Management
+    # ===============================================
+
+    # Bulk import users - Admin only
+    # + ctx - The HTTP request context
+    # + caller - The HTTP caller to respond to.
+    # + req - The HTTP request with bulk user data
+    # + return - Returns bulk import results
+    resource function post admin/users/bulk\-import(http:RequestContext ctx, http:Caller caller, http:Request req) returns error? {
+        
+        // Check RBAC: Only admin can bulk import users
+        string userGroups = ctx.get("userGroups").toString();
+        string[] requiredGroups = [auth:authorizedRoles.Admin];
+        if (!auth:hasRequiredAccess(userGroups, requiredGroups)) {
+            log:printError("Access denied: Admin access required for bulk user import");
+            return caller->respond(createForbiddenError("Admin access required to bulk import users"));
+        }
+        
+        // Prepare headers for the user service call
+        map<string> headers = {
+            "X-User-Id": ctx.get("userId").toString(),
+            "X-Username": ctx.get("username").toString(),
+            "X-User-Groups": ctx.get("userGroups").toString(),
+            "Authorization": "Bearer " + ctx.get("m2mToken").toString(),
+            "Content-Type": "application/json"
+        };
+
+        // Get request payload and forward to user service
+        json|error payload = req.getJsonPayload();
+        if payload is error {
+            log:printError("Invalid JSON payload: " + payload.message());
+            return caller->respond(createBadRequestError("Invalid JSON payload"));
+        }
+
+        log:printInfo("Forwarding POST /admin/users/bulk-import request to user service");
+        http:Response|error response = userServiceClient->post("/admin/users/bulk-import", payload, headers = headers);
+        if response is http:Response {
+            return caller->respond(response);
+        } else {
+            log:printError("Error calling user service: " + response.message());
+            return caller->respond(createInternalServerError());
+        }
+    }
+
+    # Create single user - Admin only
+    # + ctx - The HTTP request context
+    # + caller - The HTTP caller to respond to.
+    # + req - The HTTP request with user data
+    # + return - Returns created user details
+    resource function post admin/users(http:RequestContext ctx, http:Caller caller, http:Request req) returns error? {
+        
+        // Check RBAC: Only admin can create users
+        string userGroups = ctx.get("userGroups").toString();
+        string[] requiredGroups = [auth:authorizedRoles.Admin];
+        if (!auth:hasRequiredAccess(userGroups, requiredGroups)) {
+            log:printError("Access denied: Admin access required for user creation");
+            return caller->respond(createForbiddenError("Admin access required to create users"));
+        }
+        
+        // Prepare headers for the user service call
+        map<string> headers = {
+            "X-User-Id": ctx.get("userId").toString(),
+            "X-Username": ctx.get("username").toString(),
+            "X-User-Groups": ctx.get("userGroups").toString(),
+            "Authorization": "Bearer " + ctx.get("m2mToken").toString(),
+            "Content-Type": "application/json"
+        };
+
+        // Get request payload and forward to user service
+        json|error payload = req.getJsonPayload();
+        if payload is error {
+            log:printError("Invalid JSON payload: " + payload.message());
+            return caller->respond(createBadRequestError("Invalid JSON payload"));
+        }
+
+        log:printInfo("Forwarding POST /admin/users request to user service");
+        http:Response|error response = userServiceClient->post("/admin/users", payload, headers = headers);
+        if response is http:Response {
+            return caller->respond(response);
+        } else {
+            log:printError("Error calling user service: " + response.message());
+            return caller->respond(createInternalServerError());
+        }
+    }
+
+    # Get user by ID - Admin and Staff only
+    # + ctx - The HTTP request context
+    # + caller - The HTTP caller to respond to.
+    # + userId - The ID of the user to fetch
+    # + return - Returns user details
+    resource function get admin/users/[string userId](http:RequestContext ctx, http:Caller caller) returns error? {
+        
+        // Check RBAC: Only admin and staff can view user details
+        string userGroups = ctx.get("userGroups").toString();
+        string[] requiredGroups = [auth:authorizedRoles.Admin, auth:authorizedRoles.Staff];
+        if (!auth:hasRequiredAccess(userGroups, requiredGroups)) {
+            log:printError("Access denied: Admin or staff access required for user details");
+            return caller->respond(createForbiddenError("Admin or staff access required to view user details"));
+        }
+        
+        // Prepare headers for the user service call
+        map<string> headers = {
+            "X-User-Id": ctx.get("userId").toString(),
+            "X-Username": ctx.get("username").toString(),
+            "X-User-Groups": ctx.get("userGroups").toString(),
+            "Authorization": "Bearer " + ctx.get("m2mToken").toString()
+        };
+
+        log:printInfo("Forwarding GET /admin/users/" + userId + " request to user service");
+        http:Response|error response = userServiceClient->get("/admin/users/" + userId, headers = headers);
+        if response is http:Response {
+            return caller->respond(response);
+        } else {
+            log:printError("Error calling user service: " + response.message());
+            return caller->respond(createInternalServerError());
+        }
+    }
+
+    # Update user - Admin only
+    # + ctx - The HTTP request context
+    # + caller - The HTTP caller to respond to.
+    # + req - The HTTP request with updated user data
+    # + userId - The ID of the user to update
+    # + return - Returns updated user details
+    resource function patch admin/users/[string userId](http:RequestContext ctx, http:Caller caller, http:Request req) returns error? {
+        
+        // Check RBAC: Only admin can update users
+        string userGroups = ctx.get("userGroups").toString();
+        string[] requiredGroups = [auth:authorizedRoles.Admin];
+        if (!auth:hasRequiredAccess(userGroups, requiredGroups)) {
+            log:printError("Access denied: Admin access required for user updates");
+            return caller->respond(createForbiddenError("Admin access required to update users"));
+        }
+        
+        // Prepare headers for the user service call
+        map<string> headers = {
+            "X-User-Id": ctx.get("userId").toString(),
+            "X-Username": ctx.get("username").toString(),
+            "X-User-Groups": ctx.get("userGroups").toString(),
+            "Authorization": "Bearer " + ctx.get("m2mToken").toString(),
+            "Content-Type": "application/json"
+        };
+
+        // Get request payload and forward to user service
+        json|error payload = req.getJsonPayload();
+        if payload is error {
+            log:printError("Invalid JSON payload: " + payload.message());
+            return caller->respond(createBadRequestError("Invalid JSON payload"));
+        }
+
+        log:printInfo("Forwarding PATCH /admin/users/" + userId + " request to user service");
+        http:Response|error response = userServiceClient->patch("/admin/users/" + userId, payload, headers = headers);
+        if response is http:Response {
+            return caller->respond(response);
+        } else {
+            log:printError("Error calling user service: " + response.message());
+            return caller->respond(createInternalServerError());
+        }
+    }
+
+    # Deactivate user - Admin only
+    # + ctx - The HTTP request context
+    # + caller - The HTTP caller to respond to.
+    # + userId - The ID of the user to deactivate
+    # + return - Returns success message
+    resource function patch admin/users/[string userId]/deactivate(http:RequestContext ctx, http:Caller caller) returns error? {
+        
+        // Check RBAC: Only admin can deactivate users
+        string userGroups = ctx.get("userGroups").toString();
+        string[] requiredGroups = [auth:authorizedRoles.Admin];
+        if (!auth:hasRequiredAccess(userGroups, requiredGroups)) {
+            log:printError("Access denied: Admin access required for user deactivation");
+            return caller->respond(createForbiddenError("Admin access required to deactivate users"));
+        }
+        
+        // Prepare headers for the user service call
+        map<string> headers = {
+            "X-User-Id": ctx.get("userId").toString(),
+            "X-Username": ctx.get("username").toString(),
+            "X-User-Groups": ctx.get("userGroups").toString(),
+            "Authorization": "Bearer " + ctx.get("m2mToken").toString()
+        };
+
+        log:printInfo("Forwarding PATCH /admin/users/" + userId + "/deactivate request to user service");
+        http:Response|error response = userServiceClient->patch("/admin/users/" + userId + "/deactivate", (), headers = headers);
+        if response is http:Response {
+            return caller->respond(response);
+        } else {
+            log:printError("Error calling user service: " + response.message());
+            return caller->respond(createInternalServerError());
+        }
+    }
+
+    # User Service - Get user profile
+    # 
+    # + ctx - The HTTP request context
+    # + caller - The HTTP caller to respond to.
+    # + return - Returns user profile information
+    resource function get users/me(http:RequestContext ctx, http:Caller caller) returns error? {
+        
+        // Prepare headers for the user service call
+        map<string> headers = {
+            "X-User-Id": ctx.get("userId").toString(),
+            "X-Username": ctx.get("username").toString(),
+            "X-User-Groups": ctx.get("userGroups").toString(),
+            "Authorization": "Bearer " + ctx.get("m2mToken").toString()
+        };
+
+        log:printInfo("Forwarding GET /users/me request to user service");
+        http:Response|error response = userServiceClient->get("/users/me", headers = headers);
+        if response is http:Response {
+            return caller->respond(response);
+        } else {
+            log:printError("Error calling user service: " + response.message());
+            return caller->respond(createInternalServerError());
+        }
+    }
+
+    # User service health check - Admin only
+    # 
+    # + ctx - The HTTP request context
+    # + caller - The HTTP caller to respond to.
+    # + return - Returns health status
+    resource function get users/health(http:RequestContext ctx, http:Caller caller) returns error? {
+        
+        // Check RBAC: Only admin can check service health
+        string userGroups = ctx.get("userGroups").toString();
+        string[] requiredGroups = [auth:authorizedRoles.Admin];
+        if (!auth:hasRequiredAccess(userGroups, requiredGroups)) {
+            log:printError("Access denied: Admin access required for health check");
+            return caller->respond(createForbiddenError("Admin access required to check service health"));
+        }
+        
+        // Prepare headers for the user service call
+        map<string> headers = {
+            "X-User-Id": ctx.get("userId").toString(),
+            "X-Username": ctx.get("username").toString(),
+            "X-User-Groups": ctx.get("userGroups").toString(),
+            "Authorization": "Bearer " + ctx.get("m2mToken").toString()
+        };
+
+        log:printInfo("Forwarding GET /users/health request to user service");
+        http:Response|error response = userServiceClient->get("/health", headers = headers);
+        if response is http:Response {
+            return caller->respond(response);
+        } else {
+            log:printError("Error calling user service health endpoint: " + response.message());
             return caller->respond(createInternalServerError());
         }
     }

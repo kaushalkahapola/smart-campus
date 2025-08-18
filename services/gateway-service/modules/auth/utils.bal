@@ -180,7 +180,8 @@ isolated function getCachedM2MToken() returns string|error {
 
         // Generate new token
         http:Response response = check authProviderClient->post("/oauth2/token",
-            "grant_type=client_credentials",
+            "grant_type=client_credentials&" +
+            "scope=internal_user_mgt_create internal_user_mgt_list internal_user_mgt_view internal_user_mgt_delete internal_user_mgt_update",
             {
                 "Authorization": "Basic " + (M2MClientId + ":" + M2MClientSecret).toBytes().toBase64(),
                 "Content-Type": "application/x-www-form-urlencoded"

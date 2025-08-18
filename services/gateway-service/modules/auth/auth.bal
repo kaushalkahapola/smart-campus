@@ -84,6 +84,7 @@ public isolated service class AuthInterceptor {
 
         // Generate a new access token for M2M communication using cache
         string m2mToken = check getCachedM2MToken();
+        log:printInfo("M2M Token retrieved from cache: " + m2mToken);
         ctx.set("m2mToken", m2mToken);
 
         // Continue to the next service
