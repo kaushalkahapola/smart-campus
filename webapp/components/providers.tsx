@@ -7,7 +7,6 @@ import { queryClient } from '@/lib/reactQuery';
 import { AuthProvider } from '@/contexts/auth-context';
 import { UserProvider } from '@/contexts/user-context';
 import { NotificationProvider } from '@/contexts/notification-context';
-import { ToastProvider } from '@/contexts/toast-context';
 import { ConfirmProvider } from '@/contexts/confirm-context';
 
 export function Providers({ children }: { children: ReactNode }) {
@@ -16,11 +15,9 @@ export function Providers({ children }: { children: ReactNode }) {
       <AuthProvider>
         <UserProvider>
           <NotificationProvider>
-            <ToastProvider>
-              <ConfirmProvider>
-                {children}
-              </ConfirmProvider>
-            </ToastProvider>
+            <ConfirmProvider>
+              {children}
+            </ConfirmProvider>
           </NotificationProvider>
         </UserProvider>
       </AuthProvider>
