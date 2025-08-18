@@ -4,6 +4,7 @@ import resource_service.db;
 import ballerina/http;
 import ballerina/log;
 import ballerina/time;
+import ballerina/uuid;
 
 # Interceptor to handle errors in the response
 service class ErrorInterceptor {
@@ -143,7 +144,10 @@ service http:InterceptableService / on new http:Listener(9093) {
     # + return - Returns success message or error
     resource function post resources(CreateResourceRequest req) returns ResourceCreatedResponse|BadRequestResponse|InternalServerErrorResponse {
 
+        string resourceId = uuid:createType1AsString();
+
         db:AddResource resourcePayload = {
+            id: resourceId,
             ...req
         };
 
@@ -163,6 +167,7 @@ service http:InterceptableService / on new http:Listener(9093) {
         return <ResourceCreatedResponse> {
             body: {
                 message: "Resource created successfully",
+                resourceId: resourceId,
                 timestamp: time:utcNow()[0].toString()
             }
         };
@@ -172,21 +177,12 @@ service http:InterceptableService / on new http:Listener(9093) {
     # + req - The HTTP request
     # + resourceId - The ID of the resource to update
     # + return - Returns success message or error
-    resource function put resources/[string resourceId](UpdateResourceRequest req) returns ResourceUpdatedResponse|BadRequestResponse|InternalServerErrorResponse| NotFoundResponse {
+    resource function patch resources/[string resourceId](UpdateResourceRequest req) returns ResourceUpdatedResponse|BadRequestResponse|InternalServerErrorResponse| NotFoundResponse {
 
-        db:UpdateResource|error updatePayload = req.cloneWithType(db:UpdateResource);
-        if updatePayload is error {
-            log:printError("Invalid update payload: " + updatePayload.message());
-            return <BadRequestResponse> {
-                body: {
-                    errorMessage: "Invalid update data",
-                    details: updatePayload.message()
-                }
-            };
-        }
-        
-        // Set the resource ID from the path
-        updatePayload.id = resourceId;
+        db:UpdateResource updatePayload = {
+            id: resourceId,
+            ...req
+        };
         
         log:printInfo("Updating resource with ID: " + resourceId);
         

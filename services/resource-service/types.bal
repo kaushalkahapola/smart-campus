@@ -1,5 +1,6 @@
 import ballerina/http;
 import ballerina/sql;
+import resource_service.db;
 
 # HTTP Response Types with structured bodies
 
@@ -95,6 +96,7 @@ public type ResourceCreatedResponse record {|
     # payload 
     record {|
         string message;
+        string resourceId;
         string timestamp;
     |} body;
 |};
@@ -219,31 +221,46 @@ public type CreateResourceRequest record {|
 # Update Resource Request
 public type UpdateResourceRequest record {|
 	# Resource name
-    string? name;
+    string name?;
 	# Resource type
-    string? 'type;
+    @sql:Column {
+        name: "type"
+    }
+    db:ResourceType 'type?;
 	# Resource capacity
-    int? capacity;
+    int capacity?;
 	# Resource features
-    json? features;
+    json features?;
 	# Resource location
-    string? location;
+    string location?;
 	# Resource building
-    string? building;
+    string building?;
     # Resource floor
-    string? floor;
+    string floor?;
     # Resource room number
-    string? room_number;
+    @sql:Column {
+        name: "room_number"
+    }
+    string roomNumber?;
     # Resource status
-	string? status; // 'available', 'maintenance', 'unavailable', 'reserved'
+    db:ResourceStatus status?;
     # Resource hourly rate
-	decimal? hourly_rate;
+    @sql:Column {
+        name: "hourly_rate"
+    }
+	decimal hourlyRate?;
 	# Resource description
-    string? description;
+    string description?;
     # Resource image URL
-    string? image_url;
+    @sql:Column {
+        name: "image_url"
+    }
+    string imageUrl?;
     # Resource contact person
-    string? contact_person;
+    @sql:Column {
+        name: "contact_person"
+    }
+    string contactPerson?;
 |};
 
 # Update Resource Status Request

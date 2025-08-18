@@ -1,5 +1,4 @@
 import ballerina/sql;
-import ballerina/uuid;
 
 # This returns a parameterized SQL query to retrieve all resources with optional filtering.
 # + filter - The filter criteria for resources (optional)
@@ -61,7 +60,6 @@ isolated function getResourceByIdQuery(string resourceId) returns sql:Parameteri
 # + resourceData - The resource details to be added.
 # + return - Returns a `sql:ParameterizedQuery` that can be executed to insert the resource.
 isolated function addResourceQuery(AddResource resourceData) returns sql:ParameterizedQuery {
-    string resourceId = uuid:createType1AsString();
     string? featuresJson = ();
     if resourceData?.features is json {
         featuresJson = resourceData?.features.toJsonString();
@@ -73,11 +71,11 @@ isolated function addResourceQuery(AddResource resourceData) returns sql:Paramet
                     floor, room_number, hourly_rate, description, image_url, 
                     contact_person, created_by)
         VALUES 
-            (${resourceId}, ${resourceData.name}, ${resourceData.'type}, ${resourceData.capacity}, 
+            (${resourceData.id}, ${resourceData.name}, ${resourceData.'type}, ${resourceData.capacity}, 
             ${featuresJson}, ${resourceData.location}, ${resourceData.building}, 
             ${resourceData.floor}, ${resourceData.roomNumber}, ${resourceData.hourlyRate}, 
             ${resourceData.description}, ${resourceData.imageUrl}, ${resourceData.contactPerson}, 
-            'admin')
+            'user_001')
     `;
 }
 
@@ -99,8 +97,9 @@ isolated function updateResourceQuery(UpdateResource updateResource) returns sql
         setParts.push(`capacity = ${updateResource.capacity}`);
     }
     
-    if updateResource.features is string {
-        setParts.push(`features = ${updateResource.features}`);
+    if updateResource?.features is json {
+        string featuresJson = updateResource?.features.toJsonString();
+        setParts.push(`features = ${featuresJson}`);
     }
     
     if updateResource.location is string {

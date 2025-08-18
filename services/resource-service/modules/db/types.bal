@@ -111,6 +111,8 @@ public type Resource record {|
 
 # AddResource record type for creating new resources
 public type AddResource record {|
+    # Resource ID
+    string id;
 	# Resource name
     string name;
 	# Resource type
@@ -163,25 +165,25 @@ public type UpdateResource record {|
     # Maximum capacity of the resource
     int capacity?;
     # Features available in JSON format
-    string? features;
+    json features?;
     # Location description
     string location?;
     # Building name
     string building?;
     # Floor number
-    string? floor;
+    string floor?;
     # Room number
-    string? roomNumber;
+    string roomNumber?;
     # Current status of the resource
     ResourceStatus status?;
     # Hourly rate for booking
     decimal hourlyRate?;
     # Description of the resource
-    string? description;
+    string description?;
     # Image URL
-    string? imageUrl;
+    string imageUrl?;
     # Contact person for the resource
-    string? contactPerson;
+    string contactPerson?;
 |};
 
 # Resource search filter

@@ -306,7 +306,7 @@ service http:InterceptableService /api on new http:Listener(9090) {
     # + req - The HTTP request with updated resource data
     # + resourceId - The ID of the resource to update
     # + return - Returns success message or error
-    resource function put resources/[string resourceId](http:RequestContext ctx, http:Caller caller, http:Request req) returns error? {
+    resource function patch resources/[string resourceId](http:RequestContext ctx, http:Caller caller, http:Request req) returns error? {
         
         // Check RBAC: Only admin and staff can update resources
         string userGroups = ctx.get("userGroups").toString();
@@ -332,8 +332,8 @@ service http:InterceptableService /api on new http:Listener(9090) {
             return caller->respond(createBadRequestError("Invalid JSON payload"));
         }
 
-        log:printInfo("Forwarding PUT /resources/" + resourceId + " request to resource service");
-        http:Response|error response = resourceServiceClient->put("/resources/" + resourceId, payload, headers = headers);
+        log:printInfo("Forwarding PATCH /resources/" + resourceId + " request to resource service");
+        http:Response|error response = resourceServiceClient->patch("/resources/" + resourceId, payload, headers = headers);
         if response is http:Response {
             return caller->respond(response);
         } else {
