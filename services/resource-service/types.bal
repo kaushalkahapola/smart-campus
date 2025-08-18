@@ -183,7 +183,7 @@ public type CreateResourceRequest record {|
     @sql:Column {
         name: "type"
     }
-    string 'type; 
+    db:ResourceType 'type;
     # Resource capacity
 	int capacity?;
 	# Resource features
