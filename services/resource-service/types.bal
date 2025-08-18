@@ -266,7 +266,7 @@ public type UpdateResourceRequest record {|
 # Update Resource Status Request
 public type UpdateResourceStatusRequest record {|
     # Resource status
-    string status; // 'available', 'maintenance', 'unavailable', 'reserved'
+    db:ResourceStatus status;
 |};
 
 # Simple Success Response
