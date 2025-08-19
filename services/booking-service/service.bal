@@ -43,7 +43,7 @@ service http:InterceptableService / on new http:Listener(9094) {
     # Admin list all bookings with filtering - Admin and Staff only
     # + status - Filter by booking status (optional)
     # + resourceId - Filter by resource ID (optional)
-    # + userId - Filter by user ID (optional)
+    # + username - Filter by user ID (optional)
     # + startDate - Filter by start date from (optional)
     # + endDate - Filter by start date to (optional)
     # + page - Page number for pagination (optional)
