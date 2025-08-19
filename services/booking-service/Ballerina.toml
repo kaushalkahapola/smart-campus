@@ -6,3 +6,43 @@ distribution = "2201.10.1"
 
 [build-options]
 observabilityIncluded = true
+
+[[dependency]]
+org = "ballerina"
+name = "http"
+version = "2.11.0"
+
+[[dependency]]
+org = "ballerina"
+name = "log"
+version = "2.9.0"
+
+[[dependency]]
+org = "ballerina"
+name = "time"
+version = "2.4.0"
+
+[[dependency]]
+org = "ballerina"
+name = "uuid"
+version = "1.7.0"
+
+[[dependency]]
+org = "ballerina"
+name = "sql"
+version = "1.11.0"
+
+[[dependency]]
+org = "ballerinax"
+name = "mysql"
+version = "1.11.0"
+
+[[dependency]]
+org = "ballerinax"
+name = "mysql.driver"
+version = "1.4.0"
+
+[[dependency]]
+org = "ballerina"
+name = "constraint"
+version = "1.4.0"

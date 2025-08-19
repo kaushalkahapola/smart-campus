@@ -789,4 +789,34 @@ service http:InterceptableService /api on new http:Listener(9090) {
             return caller->respond(createInternalServerError());
         }
     }
+
+    # ===============================================
+    # Booking SERVICE ENDPOINTS - Campus Booking Management
+    # ===============================================
+
+    # Booking Service - Create a new booking
+    #
+    # + ctx - The HTTP request context
+    # + caller - The HTTP caller to respond to.
+    # + return - Returns the created booking information
+    resource function post bookings(http:RequestContext ctx, http:Caller caller) returns error? {
+
+        // Prepare headers for the booking service call
+        map<string> headers = {
+            "X-User-Id": ctx.get("userId").toString(),
+            "X-Username": ctx.get("username").toString(),
+            "X-User-Groups": ctx.get("userGroups").toString(),
+            "Authorization": "Bearer " + ctx.get("m2mToken").toString()
+        };
+
+        log:printInfo("Forwarding POST /bookings request to booking service");
+        http:Response|error response = bookingServiceClient->post("/bookings", (), headers = headers);
+        if response is http:Response {
+            return caller->respond(response);
+        } else {
+            log:printError("Error calling booking service: " + response.message());
+            return caller->respond(createInternalServerError());
+        }
+    }
+
 }

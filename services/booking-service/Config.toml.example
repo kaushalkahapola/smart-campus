@@ -1,0 +1,34 @@
+# Booking Service Configuration Example
+
+[booking_service]
+# Service configuration
+port = 9093
+host = "localhost"
+cors_allowed_origins = ["http://localhost:3000", "https://campus.university.edu"]
+
+# Database configuration for campus resource management
+[booking_service.database]
+host = "localhost"
+port = 3306
+database = "campus_resource_db"
+user = "your_db_user"
+password = "your_db_password"
+
+# External service URLs
+[booking_service.services]
+resource_service_url = "http://localhost:9091"
+user_service_url = "http://localhost:9092"
+notification_service_url = "http://localhost:9094"
+
+# AI service configuration
+[booking_service.ai]
+enable_ai_recommendations = true
+conflict_detection_enabled = true
+auto_suggest_alternatives = true
+
+# Booking rules
+[booking_service.rules]
+max_booking_duration_hours = 8
+max_advance_booking_days = 30
+min_booking_duration_minutes = 30
+auto_cancel_no_show_hours = 2
