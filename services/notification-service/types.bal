@@ -44,14 +44,3 @@ public type UnauthorizedResponse record {|
         string errorMessage;
     |} body;
 |};
-
-
-
-# VerificationEmailResponse record type
-public type VerificationEmailResponse record {|
-    *http:Ok;
-    # payload
-    record {|
-        string message;
-    |} body;
-|};

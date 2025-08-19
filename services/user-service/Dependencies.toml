@@ -377,7 +377,6 @@ modules = [
 	{org = "kaush", packageName = "user_service", moduleName = "user_service"},
 	{org = "kaush", packageName = "user_service", moduleName = "user_service.auth"},
 	{org = "kaush", packageName = "user_service", moduleName = "user_service.db"},
-	{org = "kaush", packageName = "user_service", moduleName = "user_service.notification"},
 	{org = "kaush", packageName = "user_service", moduleName = "user_service.scim"}
 ]
 

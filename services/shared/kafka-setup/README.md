@@ -18,7 +18,7 @@
 
 1. Navigate to the booking service Kafka setup directory:
    ```cmd
-   cd f:\finmate\services\booking-service\kafka-setup
+   cd services\shared\kafka-setup
    ```
 
 2. Create a `kafka` folder and copy your extracted Kafka files:
