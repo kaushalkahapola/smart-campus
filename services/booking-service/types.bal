@@ -114,17 +114,17 @@ public type UpdateBookingRequest record {|
 # Check-in Request
 public type CheckInRequest record {|
     # Actual number of attendees
-    int? actualAttendees;
+    int actualAttendees?;
 |};
 
 # Check-out Request
 public type CheckOutRequest record {|
     # Actual number of attendees
-    int? actualAttendees;
+    int actualAttendees?;
     # Feedback rating (1-5)
-    int? feedbackRating;
+    int feedbackRating?;
     # Feedback comment
-    string? feedbackComment;
+    string feedbackComment?;
 |};
 
 # Waitlist Request

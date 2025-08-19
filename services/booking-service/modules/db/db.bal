@@ -193,7 +193,7 @@ public isolated function getResourceAvailability(string resourceId, time:Date st
 #
 # + entry - Waitlist entry data
 # + return - Number of affected rows or error
-public isolated function addWaitlistEntry(WaitlistEntry entry) returns int|error {
+public isolated function addWaitlistEntry(CreateWaitlistEntry entry) returns int|error {
     sql:ParameterizedQuery query = addWaitlistEntryQuery(entry);
     
     
@@ -217,4 +217,70 @@ public isolated function getWaitlistEntries(string resourceId) returns WaitlistE
     stream<WaitlistEntry, sql:Error?> waitlistStream = databaseClient->query(query);
     return from WaitlistEntry entry in waitlistStream
            select entry;
+}
+
+# Get user's waitlist entries
+#
+# + userId - The user ID
+# + return - Array of waitlist entries or error
+public isolated function getUserWaitlistEntries(string userId) returns WaitlistEntry[]|error {
+    sql:ParameterizedQuery query = getUserWaitlistEntriesQuery(userId);
+    
+    
+    stream<WaitlistEntry, sql:Error?> waitlistStream = databaseClient->query(query);
+    return from WaitlistEntry entry in waitlistStream
+           select entry;
+}
+
+# Remove waitlist entry
+#
+# + waitlistId - The waitlist entry ID to remove
+# + return - Number of affected rows or error
+public isolated function removeWaitlistEntry(string waitlistId) returns int|error {
+    sql:ParameterizedQuery query = removeWaitlistEntryQuery(waitlistId);
+    
+    
+    sql:ExecutionResult|sql:Error result = databaseClient->execute(query);
+    if result is sql:Error {
+        log:printError("Error removing waitlist entry: " + result.message());
+        return result;
+    }
+    
+    return result.affectedRowCount ?: 0;
+}
+
+# Update waitlist entry status
+#
+# + waitlistId - The waitlist entry ID to update
+# + status - New status
+# + fulfilledBookingId - Booking ID if fulfilled
+# + return - Number of affected rows or error
+public isolated function updateWaitlistEntry(string waitlistId, string status, string? fulfilledBookingId = ()) returns int|error {
+    sql:ParameterizedQuery query = updateWaitlistEntryQuery(waitlistId, status, fulfilledBookingId);
+    
+    
+    sql:ExecutionResult|sql:Error result = databaseClient->execute(query);
+    if result is sql:Error {
+        log:printError("Error updating waitlist entry: " + result.message());
+        return result;
+    }
+    
+    return result.affectedRowCount ?: 0;
+}
+
+# Mark waitlist entry as notified
+#
+# + waitlistId - The waitlist entry ID to mark as notified
+# + return - Number of affected rows or error
+public isolated function markWaitlistNotified(string waitlistId) returns int|error {
+    sql:ParameterizedQuery query = markWaitlistNotifiedQuery(waitlistId);
+    
+    
+    sql:ExecutionResult|sql:Error result = databaseClient->execute(query);
+    if result is sql:Error {
+        log:printError("Error marking waitlist as notified: " + result.message());
+        return result;
+    }
+    
+    return result.affectedRowCount ?: 0;
 }

@@ -5,6 +5,8 @@ import ballerina/http;
 import ballerina/log;
 import ballerina/time;
 import ballerina/data.jsondata;
+import ballerina/uuid;
+
 
 # Interceptor to handle errors in the response
 service class ErrorInterceptor {
@@ -407,6 +409,21 @@ service http:InterceptableService / on new http:Listener(9094) {
                     details: result.message()
                 }
             };
+        }
+
+        // Publish booking created event (mock Kafka implementation)
+        json eventData = {
+            "id": bookingRecord.id,
+            "userId": bookingRecord.userId,
+            "resourceId": bookingRecord.resourceId,
+            "title": bookingRecord.title,
+            "status": bookingRecord.status,
+            "startTime": formatDateTime(startTime),
+            "endTime": formatDateTime(endTime)
+        };
+        error? eventResult = publishBookingEvent("booking.created", bookingRecord.id, userId, req.resourceId, eventData);
+        if eventResult is error {
+            log:printWarn("Failed to publish booking event: " + eventResult.message());
         }
         
         log:printInfo("Successfully created booking: " + bookingRecord.id);
@@ -842,6 +859,464 @@ service http:InterceptableService / on new http:Listener(9094) {
             body: {
                 message: "Booking cancelled successfully",
                 bookingId: bookingId,
+                timestamp: getCurrentTimestamp()
+            }
+        };
+    }
+
+    
+    # ========================================
+    # WAITLIST MANAGEMENT ENDPOINTS
+    # ========================================
+
+    # Join waitlist for a resource
+    # + resourceId - The resource ID to join waitlist for
+    # + req - Waitlist request data
+    # + httpReq - The HTTP request
+    # + return - Returns waitlist entry result
+    resource function post waitlist/[string resourceId](WaitlistRequest req, http:Request httpReq) returns WaitlistResponse|BadRequestResponse|InternalServerErrorResponse|http:HeaderNotFoundError {
+        
+        string|error userId = getUserIdFromRequest(httpReq);
+        if userId is error {
+            return <BadRequestResponse> {
+                body: {
+                    errorMessage: "User ID not found",
+                    details: userId.message()
+                }
+            };
+        }
+        
+        log:printInfo("Adding user " + userId + " to waitlist for resource: " + resourceId);
+        
+        // Parse desired times
+        time:Civil|error desiredStartTime = parseDateTime(req.desiredStartTime);
+        time:Civil|error desiredEndTime = parseDateTime(req.desiredEndTime);
+        
+        if desiredStartTime is error || desiredEndTime is error {
+            return <BadRequestResponse> {
+                body: {
+                    errorMessage: "Invalid datetime format",
+                    details: "Desired start and end times must be in ISO format"
+                }
+            };
+        }
+        
+        // Calculate priority
+        string groups = check httpReq.getHeader("X-User-Groups");
+        string[]|error groupsList = jsondata:parseString(groups);
+        
+        if groupsList is error {
+            return <InternalServerErrorResponse> {
+                body: {
+                    errorMessage: "Failed to parse user groups",
+                    details: groupsList.message()
+                }
+            };
+        }
+        
+        auth:UserInfo userInfo = {
+            userId: userId,
+            groups: groupsList
+        };
+        
+        int priority = calculateWaitlistPriority(userInfo, resourceId);
+        
+        // Create waitlist entry
+        db:CreateWaitlistEntry entry = {
+            id: uuid:createType1AsString(),
+            userId: userId,
+            resourceId: resourceId,
+            preferredStart: desiredStartTime,
+            preferredEnd: desiredEndTime,
+            priorityScore: priority,
+            status: "active",
+            autoBook: true,
+            flexibilityHours: 0,
+            expiresAt: null
+        };
+        
+        int|error result = db:addWaitlistEntry(entry);
+        if result is error {
+            log:printError("Failed to add waitlist entry: " + result.message());
+            return <InternalServerErrorResponse> {
+                body: {
+                    errorMessage: "Failed to join waitlist",
+                    details: result.message()
+                }
+            };
+        }
+        
+        // Get position in waitlist
+        db:WaitlistEntry[]|error waitlistEntries = db:getWaitlistEntries(resourceId);
+        int position = 1; // Default position
+        if waitlistEntries is db:WaitlistEntry[] {
+            foreach int i in 0 ..< waitlistEntries.length() {
+                if waitlistEntries[i].id == entry.id {
+                    position = i + 1;
+                    break;
+                }
+            }
+        }
+        
+        log:printInfo("Successfully added user to waitlist, position: " + position.toString());
+        return <WaitlistResponse> {
+            body: {
+                message: "Successfully joined waitlist",
+                data: {
+                    waitlistId: entry.id,
+                    position: position,
+                    estimatedAvailability: "Will notify when available"
+                },
+                timestamp: getCurrentTimestamp()
+            }
+        };
+    }
+
+    # Get user's waitlist entries
+    # + httpReq - The HTTP request
+    # + return - Returns user's waitlist entries
+    resource function get waitlist(http:Request httpReq) returns BookingListResponse|InternalServerErrorResponse|http:HeaderNotFoundError {
+        
+        string|error userId = getUserIdFromRequest(httpReq);
+        if userId is error {
+            return <InternalServerErrorResponse> {
+                body: {
+                    errorMessage: "User ID not found",
+                    details: userId.message()
+                }
+            };
+        }
+        
+        log:printInfo("Fetching waitlist entries for user: " + userId);
+        
+        // Get user's waitlist entries
+        db:WaitlistEntry[]|error waitlistEntries = db:getUserWaitlistEntries(userId);
+        if waitlistEntries is error {
+            return <InternalServerErrorResponse> {
+                body: {
+                    errorMessage: "Failed to fetch waitlist entries",
+                    details: waitlistEntries.message()
+                }
+            };
+        }
+        
+        // Convert to JSON array
+        json[] waitlistJson = [];
+        foreach db:WaitlistEntry entry in waitlistEntries {
+            waitlistJson.push({
+                "id": entry.id,
+                "resourceId": entry.resourceId,
+                "preferredStart": formatDateTime(entry.preferredStart),
+                "preferredEnd": formatDateTime(entry.preferredEnd),
+                "priorityScore": entry.priorityScore ?: 0,
+                "status": entry.status ?: "active",
+                "flexibilityHours": entry.flexibilityHours ?: 0,
+                "autoBook": entry.autoBook ?: true,
+                "position": 0, // TODO: Calculate actual position
+                "createdAt": entry.createdAt is time:Utc ? time:utcToString(<time:Utc>entry.createdAt) : "N/A"
+            });
+        }
+        
+        return <BookingListResponse> {
+            body: {
+                message: "Waitlist entries fetched successfully",
+                data: {
+                    bookings: waitlistJson,
+                    total: waitlistEntries.length(),
+                    page: 1,
+                    pageSize: 20
+                },
+                timestamp: getCurrentTimestamp()
+            }
+        };
+    }
+
+    # Leave waitlist
+    # + waitlistId - The waitlist entry ID to remove
+    # + httpReq - The HTTP request
+    # + return - Returns removal result
+    resource function delete waitlist/[string waitlistId](http:Request httpReq) returns BookingDeletedResponse|NotFoundResponse|ForbiddenResponse|InternalServerErrorResponse|http:HeaderNotFoundError {
+        
+        string|error userId = getUserIdFromRequest(httpReq);
+        if userId is error {
+            return <InternalServerErrorResponse> {
+                body: {
+                    errorMessage: "User ID not found",
+                    details: userId.message()
+                }
+            };
+        }
+        
+        log:printInfo("Removing waitlist entry: " + waitlistId + " for user: " + userId);
+        
+        int|error result = db:removeWaitlistEntry(waitlistId);
+        if result is error {
+            return <InternalServerErrorResponse> {
+                body: {
+                    errorMessage: "Failed to remove waitlist entry",
+                    details: result.message()
+                }
+            };
+        }
+        
+        if result == 0 {
+            return <NotFoundResponse> {
+                body: {
+                    errorMessage: "Waitlist entry not found",
+                    details: "No waitlist entry found with ID: " + waitlistId
+                }
+            };
+        }
+        
+        return <BookingDeletedResponse> {
+            body: {
+                message: "Successfully left waitlist",
+                bookingId: waitlistId,
+                timestamp: getCurrentTimestamp()
+            }
+        };
+    }
+
+    # ========================================
+    # CHECK-IN/CHECK-OUT ENDPOINTS
+    # ========================================
+
+    # Check into a booking
+    # + bookingId - The booking ID to check into
+    # + req - Check-in request data
+    # + httpReq - The HTTP request
+    # + return - Returns check-in result
+    resource function post bookings/[string bookingId]/checkin(CheckInRequest req, http:Request httpReq) returns CheckInResponse|NotFoundResponse|ForbiddenResponse|BadRequestResponse|InternalServerErrorResponse|http:HeaderNotFoundError {
+        
+        string|error userId = getUserIdFromRequest(httpReq);
+        if userId is error {
+            return <InternalServerErrorResponse> {
+                body: {
+                    errorMessage: "User ID not found",
+                    details: userId.message()
+                }
+            };
+        }
+        
+        log:printInfo("Check-in for booking: " + bookingId + " by user: " + userId);
+        
+        // Get existing booking
+        db:Booking|error existingBooking = db:getBookingById(bookingId);
+        if existingBooking is error {
+            return <NotFoundResponse> {
+                body: {
+                    errorMessage: "Booking not found",
+                    details: "Booking with ID " + bookingId + " not found"
+                }
+            };
+        }
+        
+        // Verify user owns the booking
+        if existingBooking.userId != userId {
+            return <ForbiddenResponse> {
+                body: {
+                    errorMessage: "Access denied",
+                    details: "You can only check into your own bookings"
+                }
+            };
+        }
+        
+        // Update booking with check-in time
+        time:Civil checkInTime = time:utcToCivil(time:utcNow());
+        db:UpdateBooking updateRecord = {
+            id: bookingId,
+            title: null,
+            description: null,
+            startTime: null,
+            endTime: null,
+            status: db:IN_PROGRESS,
+            purpose: null,
+            attendeesCount: null,
+            specialRequirements: null,
+            approvalNeeded: null,
+            approvedBy: null,
+            checkInTime: checkInTime,
+            checkOutTime: null,
+            actualAttendees: req.actualAttendees,
+            feedbackRating: null,
+            feedbackComment: null
+        };
+        
+        int|error result = db:updateBooking(updateRecord);
+        if result is error {
+            return <InternalServerErrorResponse> {
+                body: {
+                    errorMessage: "Failed to check in",
+                    details: result.message()
+                }
+            };
+        }
+        
+        log:printInfo("Successfully checked into booking: " + bookingId);
+        return <CheckInResponse> {
+            body: {
+                message: "Successfully checked in",
+                bookingId: bookingId,
+                checkInTime: formatDateTime(checkInTime),
+                timestamp: getCurrentTimestamp()
+            }
+        };
+    }
+
+    # Check out of a booking
+    # + bookingId - The booking ID to check out of
+    # + req - Check-out request data
+    # + httpReq - The HTTP request
+    # + return - Returns check-out result
+    resource function post bookings/[string bookingId]/checkout(CheckOutRequest req, http:Request httpReq) returns CheckOutResponse|NotFoundResponse|ForbiddenResponse|BadRequestResponse|InternalServerErrorResponse|http:HeaderNotFoundError {
+        
+        string|error userId = getUserIdFromRequest(httpReq);
+        if userId is error {
+            return <InternalServerErrorResponse> {
+                body: {
+                    errorMessage: "User ID not found",
+                    details: userId.message()
+                }
+            };
+        }
+        
+        log:printInfo("Check-out for booking: " + bookingId + " by user: " + userId);
+        
+        // Get existing booking
+        db:Booking|error existingBooking = db:getBookingById(bookingId);
+        if existingBooking is error {
+            return <NotFoundResponse> {
+                body: {
+                    errorMessage: "Booking not found",
+                    details: "Booking with ID " + bookingId + " not found"
+                }
+            };
+        }
+        
+        // Verify user owns the booking
+        if existingBooking.userId != userId {
+            return <ForbiddenResponse> {
+                body: {
+                    errorMessage: "Access denied",
+                    details: "You can only check out of your own bookings"
+                }
+            };
+        }
+        
+        // Update booking with check-out time
+        time:Civil checkOutTime = time:utcToCivil(time:utcNow());
+        db:UpdateBooking updateRecord = {
+            id: bookingId,
+            title: null,
+            description: null,
+            startTime: null,
+            endTime: null,
+            status: db:COMPLETED,
+            purpose: null,
+            attendeesCount: null,
+            specialRequirements: null,
+            approvalNeeded: null,
+            approvedBy: null,
+            checkInTime: null,
+            checkOutTime: checkOutTime,
+            actualAttendees: req.actualAttendees,
+            feedbackRating: req.feedbackRating,
+            feedbackComment: req.feedbackComment
+        };
+        
+        int|error result = db:updateBooking(updateRecord);
+        if result is error {
+            return <InternalServerErrorResponse> {
+                body: {
+                    errorMessage: "Failed to check out",
+                    details: result.message()
+                }
+            };
+        }
+        
+        log:printInfo("Successfully checked out of booking: " + bookingId);
+        return <CheckOutResponse> {
+            body: {
+                message: "Successfully checked out",
+                bookingId: bookingId,
+                checkOutTime: formatDateTime(checkOutTime),
+                timestamp: getCurrentTimestamp()
+            }
+        };
+    }
+
+    # ========================================
+    # BULK OPERATIONS ENDPOINTS
+    # ========================================
+
+    # Admin bulk create bookings
+    # + req - Bulk booking request data
+    # + httpReq - The HTTP request
+    # + return - Returns bulk creation result
+    resource function post admin/bookings/bulk(BulkBookingRequest req, http:Request httpReq) returns BulkBookingResponse|BadRequestResponse|InternalServerErrorResponse|http:HeaderNotFoundError {
+        
+        string|error userId = getUserIdFromRequest(httpReq);
+        if userId is error {
+            return <InternalServerErrorResponse> {
+                body: {
+                    errorMessage: "User ID not found",
+                    details: userId.message()
+                }
+            };
+        }
+        
+        log:printInfo("Bulk creating " + req.bookings.length().toString() + " bookings by admin: " + userId);
+        
+        int successfulBookings = 0;
+        record {|string resourceId; string startTime; string reason;|}[] failures = [];
+        
+        foreach CreateBookingRequest bookingReq in req.bookings {
+            // Validate and create each booking
+            error? validationResult = validateBookingRequest(bookingReq);
+            if validationResult is error {
+                failures.push({
+                    resourceId: bookingReq.resourceId,
+                    startTime: bookingReq.startTime,
+                    reason: validationResult.message()
+                });
+                continue;
+            }
+            
+            // Create booking record
+            db:CreateBooking|error bookingRecord = createBookingRecord(bookingReq, userId);
+            if bookingRecord is error {
+                failures.push({
+                    resourceId: bookingReq.resourceId,
+                    startTime: bookingReq.startTime,
+                    reason: bookingRecord.message()
+                });
+                continue;
+            }
+            
+            // Create booking in database
+            int|error result = db:createBooking(bookingRecord);
+            if result is error {
+                failures.push({
+                    resourceId: bookingReq.resourceId,
+                    startTime: bookingReq.startTime,
+                    reason: result.message()
+                });
+            } else {
+                successfulBookings += 1;
+            }
+        }
+        
+        log:printInfo("Bulk booking completed: " + successfulBookings.toString() + " successful, " + failures.length().toString() + " failed");
+        
+        return <BulkBookingResponse> {
+            body: {
+                message: "Bulk booking operation completed",
+                data: {
+                    totalRequests: req.bookings.length(),
+                    successfulBookings: successfulBookings,
+                    failed: failures.length(),
+                    failures: failures
+                },
                 timestamp: getCurrentTimestamp()
             }
         };

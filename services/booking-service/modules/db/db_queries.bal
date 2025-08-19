@@ -290,14 +290,15 @@ isolated function getResourceAvailabilityQuery(string resourceId, time:Date star
 #
 # + entry - Waitlist entry data
 # + return - SQL query with parameters
-isolated function addWaitlistEntryQuery(WaitlistEntry entry) returns sql:ParameterizedQuery {
+isolated function addWaitlistEntryQuery(CreateWaitlistEntry entry) returns sql:ParameterizedQuery {
     return `INSERT INTO waitlist (
-        id, user_id, resource_id, desired_start_time, desired_end_time, 
-        priority, status, created_at
+        id, user_id, resource_id, preferred_start, preferred_end, 
+        flexibility_hours, priority_score, status, auto_book, expires_at
     ) VALUES (
         ${entry.id}, ${entry.userId}, ${entry.resourceId}, 
-        ${entry.desiredStartTime}, ${entry.desiredEndTime},
-        ${entry.priority}, ${entry.status}, ${entry.createdAt}
+        ${entry.preferredStart}, ${entry.preferredEnd},
+        ${entry.flexibilityHours ?: 0}, ${entry.priorityScore ?: 0}, 
+        ${entry.status ?: "active"}, ${entry.autoBook ?: true}, ${entry.expiresAt}
     )`;
 }
 
@@ -307,9 +308,59 @@ isolated function addWaitlistEntryQuery(WaitlistEntry entry) returns sql:Paramet
 # + return - SQL query with parameters
 isolated function getWaitlistEntriesQuery(string resourceId) returns sql:ParameterizedQuery {
     return `SELECT 
-        id, user_id, resource_id, desired_start_time, desired_end_time,
-        priority, status, created_at, notified_at, expires_at
+        id, user_id, resource_id, preferred_start, preferred_end,
+        flexibility_hours, priority_score, status, fulfilled_booking_id,
+        auto_book, notification_sent, expires_at, created_at, updated_at
     FROM waitlist 
-    WHERE resource_id = ${resourceId} AND status = 'waiting'
-    ORDER BY priority DESC, created_at ASC`;
+    WHERE resource_id = ${resourceId} AND status = 'active'
+    ORDER BY priority_score DESC, created_at ASC`;
+}
+
+# Generate SQL query to get user's waitlist entries
+#
+# + userId - The user ID
+# + return - SQL query with parameters
+isolated function getUserWaitlistEntriesQuery(string userId) returns sql:ParameterizedQuery {
+    return `SELECT 
+        id, user_id, resource_id, preferred_start, preferred_end,
+        flexibility_hours, priority_score, status, fulfilled_booking_id,
+        auto_book, notification_sent, expires_at, created_at, updated_at
+    FROM waitlist 
+    WHERE user_id = ${userId}
+    ORDER BY created_at DESC`;
+}
+
+# Generate SQL query to remove waitlist entry
+#
+# + waitlistId - The waitlist entry ID to remove
+# + return - SQL query with parameters
+isolated function removeWaitlistEntryQuery(string waitlistId) returns sql:ParameterizedQuery {
+    return `DELETE FROM waitlist WHERE id = ${waitlistId}`;
+}
+
+# Generate SQL query to update waitlist entry status
+#
+# + waitlistId - The waitlist entry ID to update
+# + status - New status
+# + fulfilledBookingId - Booking ID if fulfilled
+# + return - SQL query with parameters
+isolated function updateWaitlistEntryQuery(string waitlistId, string status, string? fulfilledBookingId = ()) returns sql:ParameterizedQuery {
+    sql:ParameterizedQuery baseQuery = `UPDATE waitlist SET status = ${status}, updated_at = NOW()`;
+    
+    if fulfilledBookingId is string {
+        baseQuery = sql:queryConcat(baseQuery, `, fulfilled_booking_id = ${fulfilledBookingId}`);
+    }
+    
+    return sql:queryConcat(baseQuery, ` WHERE id = ${waitlistId}`);
+}
+
+# Generate SQL query to mark waitlist entry as notified
+#
+# + waitlistId - The waitlist entry ID to update
+# + return - SQL query with parameters
+isolated function markWaitlistNotifiedQuery(string waitlistId) returns sql:ParameterizedQuery {
+    return `UPDATE waitlist SET 
+        notification_sent = TRUE, 
+        updated_at = NOW() 
+    WHERE id = ${waitlistId}`;
 }

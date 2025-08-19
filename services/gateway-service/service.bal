@@ -1064,4 +1064,198 @@ service http:InterceptableService /api on new http:Listener(9090) {
         }
     }
 
+    # Booking Service - Join waitlist for a resource
+    #
+    # + ctx - The HTTP request context
+    # + caller - The HTTP caller to respond to.
+    # + req - The HTTP request
+    # + resourceId - The resource ID to join waitlist for
+    # + return - Returns waitlist join result
+    resource function post waitlist/[string resourceId](http:RequestContext ctx, http:Caller caller, http:Request req) returns error? {
+
+        // Prepare headers for the booking service call
+        map<string> headers = {
+            "X-User-Id": ctx.get("userId").toString(),
+            "X-Username": ctx.get("username").toString(),
+            "X-User-Groups": ctx.get("userGroups").toString(),
+            "Authorization": "Bearer " + ctx.get("m2mToken").toString(),
+            "Content-Type": "application/json"
+        };
+
+        json|error payload = req.getJsonPayload();
+        if payload is error {
+            log:printError("Error parsing waitlist data: " + payload.message());
+            return caller->respond(createBadRequestError("Invalid waitlist data"));
+        }
+
+        log:printInfo("Forwarding POST /waitlist/" + resourceId + " request to booking service");
+        http:Response|error response = bookingServiceClient->post("/waitlist/" + resourceId, payload, headers = headers);
+        if response is http:Response {
+            return caller->respond(response);
+        } else {
+            log:printError("Error calling booking service: " + response.message());
+            return caller->respond(createInternalServerError());
+        }
+    }
+
+    # Booking Service - Get user's waitlist entries
+    #
+    # + ctx - The HTTP request context
+    # + caller - The HTTP caller to respond to.
+    # + return - Returns user's waitlist entries
+    resource function get waitlist(http:RequestContext ctx, http:Caller caller) returns error? {
+
+        // Prepare headers for the booking service call
+        map<string> headers = {
+            "X-User-Id": ctx.get("userId").toString(),
+            "X-Username": ctx.get("username").toString(),
+            "X-User-Groups": ctx.get("userGroups").toString(),
+            "Authorization": "Bearer " + ctx.get("m2mToken").toString()
+        };
+
+        log:printInfo("Forwarding GET /waitlist request to booking service");
+        http:Response|error response = bookingServiceClient->get("/waitlist", headers = headers);
+        if response is http:Response {
+            return caller->respond(response);
+        } else {
+            log:printError("Error calling booking service: " + response.message());
+            return caller->respond(createInternalServerError());
+        }
+    }
+
+    # Booking Service - Leave waitlist
+    #
+    # + ctx - The HTTP request context
+    # + caller - The HTTP caller to respond to.
+    # + waitlistId - The waitlist entry ID to remove
+    # + return - Returns waitlist removal result
+    resource function delete waitlist/[string waitlistId](http:RequestContext ctx, http:Caller caller) returns error? {
+
+        // Prepare headers for the booking service call
+        map<string> headers = {
+            "X-User-Id": ctx.get("userId").toString(),
+            "X-Username": ctx.get("username").toString(),
+            "X-User-Groups": ctx.get("userGroups").toString(),
+            "Authorization": "Bearer " + ctx.get("m2mToken").toString()
+        };
+
+        log:printInfo("Forwarding DELETE /waitlist/" + waitlistId + " request to booking service");
+        http:Response|error response = bookingServiceClient->delete("/waitlist/" + waitlistId, headers = headers);
+        if response is http:Response {
+            return caller->respond(response);
+        } else {
+            log:printError("Error calling booking service: " + response.message());
+            return caller->respond(createInternalServerError());
+        }
+    }
+
+    # Booking Service - Check into a booking
+    #
+    # + ctx - The HTTP request context
+    # + caller - The HTTP caller to respond to.
+    # + req - The HTTP request
+    # + bookingId - The booking ID to check into
+    # + return - Returns check-in result
+    resource function post bookings/[string bookingId]/checkin(http:RequestContext ctx, http:Caller caller, http:Request req) returns error? {
+
+        // Prepare headers for the booking service call
+        map<string> headers = {
+            "X-User-Id": ctx.get("userId").toString(),
+            "X-Username": ctx.get("username").toString(),
+            "X-User-Groups": ctx.get("userGroups").toString(),
+            "Authorization": "Bearer " + ctx.get("m2mToken").toString(),
+            "Content-Type": "application/json"
+        };
+
+        json|error payload = req.getJsonPayload();
+        if payload is error {
+            log:printError("Error parsing check-in data: " + payload.message());
+            return caller->respond(createBadRequestError("Invalid check-in data"));
+        }
+
+        log:printInfo("Forwarding POST /bookings/" + bookingId + "/checkin request to booking service");
+        http:Response|error response = bookingServiceClient->post("/bookings/" + bookingId + "/checkin", payload, headers = headers);
+        if response is http:Response {
+            return caller->respond(response);
+        } else {
+            log:printError("Error calling booking service: " + response.message());
+            return caller->respond(createInternalServerError());
+        }
+    }
+
+    # Booking Service -  Check out of a booking
+    #
+    # + ctx - The HTTP request context
+    # + caller - The HTTP caller to respond to.
+    # + req - The HTTP request
+    # + bookingId - The booking ID to check out of
+    # + return - Returns check-out result
+    resource function post bookings/[string bookingId]/checkout(http:RequestContext ctx, http:Caller caller, http:Request req) returns error? {
+
+        // Prepare headers for the booking service call
+        map<string> headers = {
+            "X-User-Id": ctx.get("userId").toString(),
+            "X-Username": ctx.get("username").toString(),
+            "X-User-Groups": ctx.get("userGroups").toString(),
+            "Authorization": "Bearer " + ctx.get("m2mToken").toString(),
+            "Content-Type": "application/json"
+        };
+
+        json|error payload = req.getJsonPayload();
+        if payload is error {
+            log:printError("Error parsing check-out data: " + payload.message());
+            return caller->respond(createBadRequestError("Invalid check-out data"));
+        }
+
+        log:printInfo("Forwarding POST /bookings/" + bookingId + "/checkout request to booking service");
+        http:Response|error response = bookingServiceClient->post("/bookings/" + bookingId + "/checkout", payload, headers = headers);
+        if response is http:Response {
+            return caller->respond(response);
+        } else {
+            log:printError("Error calling booking service: " + response.message());
+            return caller->respond(createInternalServerError());
+        }
+    }
+
+    # Booking Service - Admin bulk create bookings
+    #
+    # + ctx - The HTTP request context
+    # + caller - The HTTP caller to respond to.
+    # + req - The HTTP request
+    # + return - Returns bulk creation result
+    resource function post admin/bookings/bulk(http:RequestContext ctx, http:Caller caller, http:Request req) returns error? {
+
+        // Check RBAC: Only admin can perform bulk operations
+        string userGroups = ctx.get("userGroups").toString();
+        string[] requiredGroups = [auth:authorizedRoles.Admin];
+        if (!auth:hasRequiredAccess(userGroups, requiredGroups)) {
+            log:printError("Access denied: Admin access required for bulk booking operations");
+            return caller->respond(createForbiddenError("Admin access required for bulk booking operations"));
+        }
+
+        // Prepare headers for the booking service call
+        map<string> headers = {
+            "X-User-Id": ctx.get("userId").toString(),
+            "X-Username": ctx.get("username").toString(),
+            "X-User-Groups": ctx.get("userGroups").toString(),
+            "Authorization": "Bearer " + ctx.get("m2mToken").toString(),
+            "Content-Type": "application/json"
+        };
+
+        json|error payload = req.getJsonPayload();
+        if payload is error {
+            log:printError("Error parsing bulk booking data: " + payload.message());
+            return caller->respond(createBadRequestError("Invalid bulk booking data"));
+        }
+
+        log:printInfo("Forwarding POST /admin/bookings/bulk request to booking service");
+        http:Response|error response = bookingServiceClient->post("/admin/bookings/bulk", payload, headers = headers);
+        if response is http:Response {
+            return caller->respond(response);
+        } else {
+            log:printError("Error calling booking service: " + response.message());
+            return caller->respond(createInternalServerError());
+        }
+    }
+
 }

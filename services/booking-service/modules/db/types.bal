@@ -288,26 +288,94 @@ public type TimeSlot record {|
     boolean available;
 |};
 
-# Waitlist entry record
+# Waitlist entry record (matches campus_resource_db.waitlist table)
 public type WaitlistEntry record {|
+    # Unique identifier for waitlist entry
+    string id;
+    # User ID waiting for the booking
+    @sql:Column {
+        name: "user_id"
+    }
+    string userId;
+    # Resource ID being waited for
+    @sql:Column {
+        name: "resource_id"
+    }
+    string resourceId;
+    # Preferred start time
+    @sql:Column {
+        name: "preferred_start"
+    }
+    time:Civil preferredStart;
+    # Preferred end time
+    @sql:Column {
+        name: "preferred_end"
+    }
+    time:Civil preferredEnd;
+    # How many hours flexible on timing
+    @sql:Column {
+        name: "flexibility_hours"
+    }
+    int flexibilityHours?;
+    # Priority ranking
+    @sql:Column {
+        name: "priority_score"
+    }
+    int priorityScore?;
+    # Status of waitlist entry (active, fulfilled, expired, cancelled)
+    string status?;
+    # Fulfilled booking ID
+    @sql:Column {
+        name: "fulfilled_booking_id"
+    }
+    string? fulfilledBookingId;
+    # Automatically book when available
+    @sql:Column {
+        name: "auto_book"
+    }
+    boolean autoBook?;
+    # Notification sent flag
+    @sql:Column {
+        name: "notification_sent"
+    }
+    boolean notificationSent?;
+    # Expiry time for the waitlist entry
+    @sql:Column {
+        name: "expires_at"
+    }
+    time:Utc? expiresAt;
+    # When the entry was created
+    @sql:Column {
+        name: "created_at"
+    }
+    time:Utc? createdAt;
+    # When the entry was last updated
+    @sql:Column {
+        name: "updated_at"
+    }
+    time:Utc? updatedAt;
+|};
+
+# CreateWaitlistEntry record type for creating new waitlist entries
+public type CreateWaitlistEntry record {|
     # Unique identifier for waitlist entry
     string id;
     # User ID waiting for the booking
     string userId;
     # Resource ID being waited for
     string resourceId;
-    # Desired start time
-    time:Civil desiredStartTime;
-    # Desired end time
-    time:Civil desiredEndTime;
-    # Priority score (higher = more priority)
-    int priority;
+    # Preferred start time
+    time:Civil preferredStart;
+    # Preferred end time
+    time:Civil preferredEnd;
+    # How many hours flexible on timing
+    int flexibilityHours?;
+    # Priority ranking
+    int priorityScore?;
     # Status of waitlist entry
-    string status; # waiting, notified, expired, converted
-    # When the entry was created
-    time:Utc createdAt;
-    # When user was notified
-    time:Utc? notifiedAt;
-    # Expiry time for the notification
+    string status?;
+    # Automatically book when available
+    boolean autoBook?;
+    # Expiry time for the waitlist entry
     time:Utc? expiresAt;
 |};

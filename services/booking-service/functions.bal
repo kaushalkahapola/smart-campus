@@ -332,3 +332,34 @@ isolated function extractUserIdFromResponse(json response) returns string|error 
     json userIdField = check dataField.userId;
     return userIdField.toString();
 }
+
+
+# Simple Kafka event publisher (mock implementation)
+#
+# + eventType - Type of booking event
+# + bookingId - Booking ID  
+# + userId - User ID
+# + resourceId - Resource ID
+# + eventData - Event data
+# + return - Success or error
+isolated function publishBookingEvent(string eventType, string bookingId, string userId, string resourceId, json eventData) returns error? {
+    json event = {
+        "eventId": uuid:createType1AsString(),
+        "eventType": eventType,
+        "bookingId": bookingId,
+        "userId": userId,
+        "resourceId": resourceId,
+        "timestamp": getCurrentTimestamp(),
+        "eventData": eventData,
+        "metadata": {
+            "service": "booking-service",
+            "version": "1.0.0"
+        }
+    };
+    
+    // TODO: Replace with actual Kafka producer implementation
+    log:printInfo("📢 Kafka Event Published: " + eventType + " for booking: " + bookingId);
+    log:printInfo("Event Data: " + event.toString());
+    
+    return;
+}
