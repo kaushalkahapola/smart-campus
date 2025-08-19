@@ -31,7 +31,7 @@ service class ErrorInterceptor {
     }
 }
 
-service http:InterceptableService / on new http:Listener(9092) {
+service http:InterceptableService / on new http:Listener(9095) {
 
     public function createInterceptors() returns http:Interceptor[] {
         return [new auth:AuthInterceptor(), new ErrorInterceptor()];

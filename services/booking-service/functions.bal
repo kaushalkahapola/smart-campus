@@ -1,5 +1,6 @@
 import booking_service.db;
 import booking_service.auth;
+import booking_service.kafka;
 
 import ballerina/uuid;
 import ballerina/log;
@@ -334,7 +335,7 @@ isolated function extractUserIdFromResponse(json response) returns string|error 
 }
 
 
-# Simple Kafka event publisher (mock implementation)
+# Simple Kafka event publisher (now using real Kafka implementation)
 #
 # + eventType - Type of booking event
 # + bookingId - Booking ID  
@@ -343,23 +344,45 @@ isolated function extractUserIdFromResponse(json response) returns string|error 
 # + eventData - Event data
 # + return - Success or error
 isolated function publishBookingEvent(string eventType, string bookingId, string userId, string resourceId, json eventData) returns error? {
-    json event = {
-        "eventId": uuid:createType1AsString(),
-        "eventType": eventType,
-        "bookingId": bookingId,
-        "userId": userId,
-        "resourceId": resourceId,
-        "timestamp": getCurrentTimestamp(),
-        "eventData": eventData,
-        "metadata": {
-            "service": "booking-service",
-            "version": "1.0.0"
-        }
-    };
-    
-    // TODO: Replace with actual Kafka producer implementation
-    log:printInfo("📢 Kafka Event Published: " + eventType + " for booking: " + bookingId);
-    log:printInfo("Event Data: " + event.toString());
-    
+    // Use real Kafka producer implementation
+    error? result = kafka:publishBookingEvent(eventType, bookingId, userId, resourceId, eventData);
+    if result is error {
+        log:printError("Failed to publish booking event: " + result.message());
+        return result;
+    }
+    return;
+}
+
+# Publish waitlist event to Kafka
+#
+# + eventType - Type of waitlist event
+# + waitlistId - Waitlist entry ID
+# + userId - User ID
+# + resourceId - Resource ID
+# + eventData - Event data
+# + return - Success or error
+isolated function publishWaitlistEvent(string eventType, string waitlistId, string userId, string resourceId, json eventData) returns error? {
+    // Use real Kafka producer implementation
+    error? result = kafka:publishWaitlistEvent(eventType, waitlistId, userId, resourceId, eventData);
+    if result is error {
+        log:printError("Failed to publish waitlist event: " + result.message());
+        return result;
+    }
+    return;
+}
+
+# Publish notification event to Kafka
+#
+# + eventType - Type of notification event
+# + userId - User ID
+# + notificationData - Notification data
+# + return - Success or error
+isolated function publishNotificationEvent(string eventType, string userId, json notificationData) returns error? {
+    // Use real Kafka producer implementation
+    error? result = kafka:publishNotificationEvent(eventType, userId, notificationData);
+    if result is error {
+        log:printError("Failed to publish notification event: " + result.message());
+        return result;
+    }
     return;
 }

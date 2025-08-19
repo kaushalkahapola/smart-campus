@@ -308,7 +308,7 @@ modules = [
 [[package]]
 org = "ballerina"
 name = "uuid"
-version = "1.7.0"
+version = "1.8.0"
 dependencies = [
 	{org = "ballerina", name = "crypto"},
 	{org = "ballerina", name = "jballerina.java"},
@@ -348,6 +348,20 @@ modules = [
 
 [[package]]
 org = "ballerinax"
+name = "kafka"
+version = "4.2.0"
+dependencies = [
+	{org = "ballerina", name = "crypto"},
+	{org = "ballerina", name = "jballerina.java"},
+	{org = "ballerina", name = "uuid"},
+	{org = "ballerinai", name = "observe"}
+]
+modules = [
+	{org = "ballerinax", packageName = "kafka", moduleName = "kafka"}
+]
+
+[[package]]
+org = "ballerinax"
 name = "mysql"
 version = "1.11.0"
 dependencies = [
@@ -383,12 +397,14 @@ dependencies = [
 	{org = "ballerina", name = "uuid"},
 	{org = "ballerinai", name = "observe"},
 	{org = "ballerinax", name = "java.jdbc"},
+	{org = "ballerinax", name = "kafka"},
 	{org = "ballerinax", name = "mysql"},
 	{org = "ballerinax", name = "mysql.driver"}
 ]
 modules = [
 	{org = "kaush", packageName = "booking_service", moduleName = "booking_service"},
 	{org = "kaush", packageName = "booking_service", moduleName = "booking_service.auth"},
-	{org = "kaush", packageName = "booking_service", moduleName = "booking_service.db"}
+	{org = "kaush", packageName = "booking_service", moduleName = "booking_service.db"},
+	{org = "kaush", packageName = "booking_service", moduleName = "booking_service.kafka"}
 ]
 

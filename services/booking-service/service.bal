@@ -945,6 +945,23 @@ service http:InterceptableService / on new http:Listener(9094) {
                 }
             };
         }
+
+        // Publish waitlist joined event
+        error? eventResult = publishWaitlistEvent(
+            "waitlist.joined",
+            entry.id,
+            userId,
+            resourceId,
+            {
+                "priority": entry.priorityScore ?: 0,
+                "preferredStart": formatDateTime(entry.preferredStart),
+                "preferredEnd": formatDateTime(entry.preferredEnd),
+                "autoBook": entry.autoBook ?: true
+            }
+        );
+        if eventResult is error {
+            log:printError("Failed to publish waitlist event: " + eventResult.message());
+        }
         
         // Get position in waitlist
         db:WaitlistEntry[]|error waitlistEntries = db:getWaitlistEntries(resourceId);
