@@ -233,7 +233,7 @@ public type UpdateBooking record {|
 # Booking filter for database queries
 public type BookingFilter record {|
     # Filter by user ID
-    string? username;
+    string? userId;
     # Filter by resource ID
     string? resourceId;
     # Filter by status

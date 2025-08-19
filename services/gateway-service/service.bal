@@ -938,9 +938,10 @@ service http:InterceptableService /api on new http:Listener(9090) {
     #
     # + ctx - The HTTP request context
     # + caller - The HTTP caller to respond to.
+    # + req - The HTTP request
     # + resourceId - The ID of the resource to check
     # + return - Returns a list of conflicting bookings
-    resource function get conflicts/[string resourceId](http:RequestContext ctx, http:Caller caller) returns error? {
+    resource function get conflicts/[string resourceId](http:RequestContext ctx, http:Caller caller, http:Request req) returns error? {
 
         // Prepare headers for the booking service call
         map<string> headers = {
@@ -950,8 +951,12 @@ service http:InterceptableService /api on new http:Listener(9090) {
             "Authorization": "Bearer " + ctx.get("m2mToken").toString()
         };
 
-        log:printInfo("Forwarding GET /conflicts/" + resourceId + " request to booking service");
-        http:Response|error response = bookingServiceClient->get("/conflicts/" + resourceId, headers = headers);
+        // Forward query parameters to booking service
+        string queryParams = req.rawPath.includes("?") ? req.rawPath.substring(<int>req.rawPath.indexOf("?")) : "";
+        string conflictsPath = "/conflicts/" + resourceId + queryParams;
+
+        log:printInfo("Forwarding GET /conflicts/" + resourceId + " request to booking service: " + conflictsPath);
+        http:Response|error response = bookingServiceClient->get(conflictsPath, headers = headers);
         if response is http:Response {
             return caller->respond(response);
         } else {
@@ -964,9 +969,10 @@ service http:InterceptableService /api on new http:Listener(9090) {
     #
     # + ctx - The HTTP request context
     # + caller - The HTTP caller to respond to.
+    # + req - The HTTP request
     # + resourceId - The ID of the resource to check
     # + return - Returns the availability status of the resource
-    resource function get availability/[string resourceId](http:RequestContext ctx, http:Caller caller) returns error? {
+    resource function get availability/[string resourceId](http:RequestContext ctx, http:Caller caller, http:Request req) returns error? {
 
         // Prepare headers for the booking service call
         map<string> headers = {
@@ -976,8 +982,12 @@ service http:InterceptableService /api on new http:Listener(9090) {
             "Authorization": "Bearer " + ctx.get("m2mToken").toString()
         };
 
-        log:printInfo("Forwarding GET /availability/" + resourceId + " request to booking service");
-        http:Response|error response = bookingServiceClient->get("/availability/" + resourceId, headers = headers);
+        // Forward query parameters to booking service
+        string queryParams = req.rawPath.includes("?") ? req.rawPath.substring(<int>req.rawPath.indexOf("?")) : "";
+        string availabilityPath = "/availability/" + resourceId + queryParams;
+
+        log:printInfo("Forwarding GET /availability/" + resourceId + " request to booking service: " + availabilityPath);
+        http:Response|error response = bookingServiceClient->get(availabilityPath, headers = headers);
         if response is http:Response {
             return caller->respond(response);
         } else {
@@ -1026,7 +1036,7 @@ service http:InterceptableService /api on new http:Listener(9090) {
     # + bookingId - The ID of the booking to approve or reject
     # + action - The action to perform (approve or reject)
     # + return - Returns the result of the approval or rejection
-    resource function post admin/bookings/[string bookingId]/[string action](http:RequestContext ctx, http:Caller caller) returns error? {
+    resource function patch admin/bookings/[string bookingId]/[string action](http:RequestContext ctx, http:Caller caller) returns error? {
 
         // Check RBAC: Only admin can approve or reject bookings
         string userGroups = ctx.get("userGroups").toString();

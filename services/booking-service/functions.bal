@@ -4,6 +4,7 @@ import booking_service.auth;
 import ballerina/uuid;
 import ballerina/log;
 import ballerina/time;
+import ballerina/http;
 
 # Validate booking request data
 #
@@ -46,16 +47,10 @@ function validateBookingRequest(CreateBookingRequest request) returns error? {
 # + isoString - ISO format datetime string
 # + return - Civil time or error
 function parseDateTime(string isoString) returns time:Civil|error {
-    // TODO: Implement proper ISO datetime parsing
-    // For now, return a mock Civil time
-    return {
-        year: 2025,
-        month: 8,
-        day: 18,
-        hour: 10,
-        minute: 0,
-        second: 0
-    };
+    // Parse ISO 8601 datetime string (e.g., "2025-08-21T10:00:00Z" or "2025-08-21T10:00:00")
+    time:Utc utcTime = check time:utcFromString(isoString);
+    time:Civil civilTime = time:utcToCivil(utcTime);
+    return civilTime;
 }
 
 # Convert ISO date string to Date
@@ -63,12 +58,24 @@ function parseDateTime(string isoString) returns time:Civil|error {
 # + isoString - ISO format date string
 # + return - Date or error
 isolated function parseDate(string isoString) returns time:Date|error {
-    // TODO: Implement proper ISO date parsing
-    // For now, return a mock Date
+    // Parse ISO 8601 date string (e.g., "2025-08-21")
+    // Simple parsing approach for YYYY-MM-DD format
+    if isoString.length() != 10 {
+        return error("Invalid date format: " + isoString + ". Expected format: YYYY-MM-DD");
+    }
+    
+    string yearStr = isoString.substring(0, 4);
+    string monthStr = isoString.substring(5, 7);
+    string dayStr = isoString.substring(8, 10);
+    
+    int year = check int:fromString(yearStr);
+    int month = check int:fromString(monthStr);
+    int day = check int:fromString(dayStr);
+    
     return {
-        year: 2025,
-        month: 8,
-        day: 18
+        year: year,
+        month: month,
+        day: day
     };
 }
 
@@ -77,8 +84,13 @@ isolated function parseDate(string isoString) returns time:Date|error {
 # + civil - Civil time
 # + return - ISO format datetime string
 isolated function formatDateTime(time:Civil civil) returns string {
-    // TODO: Implement proper ISO datetime formatting
-    return "2025-08-18T10:00:00Z";
+    // Convert Civil time to ISO 8601 format
+    time:Utc|time:Error utcTime = time:utcFromCivil(civil);
+    if utcTime is time:Error {
+        // Fallback to manual formatting if conversion fails
+        return string`${civil.year}-${civil.month.toString().padZero(2)}-${civil.day.toString().padZero(2)}T${civil.hour.toString().padZero(2)}:${civil.minute.toString().padZero(2)}:${civil.second.toString().padZero(2)}Z`;
+    }
+    return time:utcToString(utcTime);
 }
 
 # Convert Date to ISO date string
@@ -86,8 +98,8 @@ isolated function formatDateTime(time:Civil civil) returns string {
 # + date - Date
 # + return - ISO format date string
 isolated function formatDate(time:Date date) returns string {
-    // TODO: Implement proper ISO date formatting
-    return "2025-08-18";
+    // Format date as YYYY-MM-DD
+    return string`${date.year}-${date.month.toString().padZero(2)}-${date.day.toString().padZero(2)}`;
 }
 
 # Create booking record from request
@@ -168,16 +180,21 @@ function createUpdateBookingRecord(UpdateBookingRequest request, string bookingI
 # + userInfo - User information
 # + return - True if user can access the booking
 function canAccessBooking(db:Booking booking, auth:UserInfo userInfo) returns boolean {
+
+    log:printInfo("User Groups: " + userInfo.groups.toString());
+
     // Users can access their own bookings
     if booking.userId == userInfo.userId {
         return true;
     }
     
-    // Admin and staff can access all bookings
-    if userInfo.role == "admin" || userInfo.role == "staff" {
-        return true;
+    // we have to check if 'admin' or 'staff' groups inside the userInfo.groups array
+    foreach string group in userInfo.groups {
+        if group == "admin" || group == "staff" {
+            return true;
+        }
     }
-    
+
     return false;
 }
 
@@ -193,8 +210,10 @@ function canModifyBooking(db:Booking booking, auth:UserInfo userInfo) returns bo
     }
     
     // Admin can modify any booking
-    if userInfo.role == "admin" {
-        return true;
+    foreach string group in userInfo.groups {
+        if group == "admin" {
+            return true;
+        }
     }
     
     return false;
@@ -204,8 +223,9 @@ function canModifyBooking(db:Booking booking, auth:UserInfo userInfo) returns bo
 #
 # + return - Current timestamp
 isolated function getCurrentTimestamp() returns string {
-    // TODO: Implement proper timestamp formatting
-    return "2025-08-18T10:00:00Z";
+    // Get current UTC time and format as ISO string
+    time:Utc currentTime = time:utcNow();
+    return time:utcToString(currentTime);
 }
 
 # Convert booking to JSON
@@ -266,10 +286,12 @@ function calculateWaitlistPriority(auth:UserInfo userInfo, string resourceId) re
     int priority = 100; // Base priority
     
     // Admin and staff get higher priority
-    if userInfo.role == "admin" {
-        priority += 50;
-    } else if userInfo.role == "staff" {
-        priority += 25;
+    foreach string group in userInfo.groups {
+        if group == "admin" {
+            priority += 50;
+        } else if group == "staff" {
+            priority += 25;
+        }
     }
     
     // TODO: Add more priority calculation logic
@@ -278,4 +300,35 @@ function calculateWaitlistPriority(auth:UserInfo userInfo, string resourceId) re
     // - Special requirements
     
     return priority;
+}
+
+# Extract user ID from request headers
+#
+# + httpReq - The HTTP request
+# + return - User ID or error
+isolated function getUserIdFromRequest(http:Request httpReq) returns string|error {
+    string username = check httpReq.getHeader("X-Username");
+    
+    // Forward auth headers
+    map<string|string[]> headers = {};
+    string[]|http:HeaderNotFoundError authHeaders = httpReq.getHeaders("Authorization");
+    if authHeaders is string[] {
+        headers["Authorization"] = authHeaders;
+    }
+    
+    http:Response response = check userServiceClient->get("/users/" + username + "/id", headers);
+    json responseBody = check response.getJsonPayload();
+    
+    // Extract user ID from nested response
+    return extractUserIdFromResponse(responseBody);
+}
+
+# Extract user ID from service response
+#
+# + response - The JSON response from the user service
+# + return - User ID or error
+isolated function extractUserIdFromResponse(json response) returns string|error {
+    json dataField = check response.data;
+    json userIdField = check dataField.userId;
+    return userIdField.toString();
 }

@@ -76,39 +76,39 @@ public type CreateBookingRequest record {|
     # Title of the booking
     string title;
     # Description of the booking
-    string? description;
+    string description?;
     # Start time of the booking
     string startTime; // ISO format datetime
     # End time of the booking
     string endTime; // ISO format datetime
     # Purpose of the booking
-    string? purpose;
+    string purpose?;
     # Number of attendees
     int attendeesCount;
     # Special requirements
-    string? specialRequirements;
+    string specialRequirements?;
     # Recurring pattern (optional)
-    string? recurringPattern;
+    string recurringPattern?;
     # Recurring end date (optional)
-    string? recurringEndDate; // ISO format date
+    string recurringEndDate?; // ISO format date
 |};
 
 # Update Booking Request
 public type UpdateBookingRequest record {|
     # Title of the booking
-    string? title;
+    string title?;
     # Description of the booking
-    string? description;
+    string description?;
     # Start time of the booking
-    string? startTime; # ISO format datetime
+    string startTime?; # ISO format datetime
     # End time of the booking
-    string? endTime; # ISO format datetime
+    string endTime?; # ISO format datetime
     # Purpose of the booking
-    string? purpose;
+    string purpose?;
     # Number of attendees
-    int? attendeesCount;
+    int attendeesCount?;
     # Special requirements
-    string? specialRequirements;
+    string specialRequirements?;
 |};
 
 # Check-in Request

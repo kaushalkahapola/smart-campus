@@ -112,10 +112,13 @@ public isolated function deleteBooking(string bookingId) returns int|error {
 public isolated function checkBookingConflicts(string resourceId, time:Civil startTime, time:Civil endTime, string? excludeBookingId = ()) returns BookingConflict[]|error {
     sql:ParameterizedQuery query = checkConflictsQuery(resourceId, startTime, endTime, excludeBookingId);
     
+    log:printInfo("Conflict check query for resource: " + resourceId);
+    log:printInfo("Start time: " + startTime.toString());
+    log:printInfo("End time: " + endTime.toString());
     
     stream<record {|string id; string title; time:Civil start_time; time:Civil end_time; string user_id;|}, sql:Error?> conflictStream = databaseClient->query(query);
     
-    return from var conflictRow in conflictStream
+    BookingConflict[]|error conflicts = from var conflictRow in conflictStream
            select {
                bookingId: conflictRow.id,
                title: conflictRow.title,
@@ -123,6 +126,15 @@ public isolated function checkBookingConflicts(string resourceId, time:Civil sta
                endTime: conflictRow.end_time,
                userId: conflictRow.user_id
            };
+    
+    if conflicts is error {
+        log:printError("Error querying conflicts: " + conflicts.message());
+        return conflicts;
+    }
+    
+    log:printInfo("Found " + conflicts.length().toString() + " conflicts");
+    
+    return conflicts;
 }
 
 # Get upcoming bookings

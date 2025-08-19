@@ -231,6 +231,36 @@ service http:InterceptableService / on new http:Listener(9092) {
         };
     }
 
+    # Get user database id from email
+    #
+    # + email - The email of the user
+    # + return - Returns the user database ID or an error
+    resource function get users/[string email]/id() returns SuccessResponse|NotFoundResponse|InternalServerErrorResponse {
+
+        log:printInfo("Fetching user database ID for email: " + email);
+
+        db:User|error user = db:getUserByEmail(email);
+        if user is error {
+            log:printError("User not found: " + email);
+            return <NotFoundResponse> {
+                body: {
+                    errorMessage: "User not found",
+                    details: "User with email " + email + " not found"
+                }
+            };
+        }
+
+        log:printInfo("Successfully fetched user database ID for email: " + email);
+        return <SuccessResponse> {
+            body: {
+                message: "User database ID fetched successfully",
+                data: {
+                    userId: user.id.toString()
+                },
+                timestamp: time:utcNow()[0].toString()
+            }
+        };
+    }
 
     # Health check endpoint
     # + return - Returns service health status

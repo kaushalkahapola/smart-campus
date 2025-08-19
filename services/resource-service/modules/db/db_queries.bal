@@ -61,9 +61,7 @@ isolated function getResourceByIdQuery(string resourceId) returns sql:Parameteri
 # + return - Returns a `sql:ParameterizedQuery` that can be executed to insert the resource.
 isolated function addResourceQuery(AddResource resourceData) returns sql:ParameterizedQuery {
     string? featuresJson = ();
-    if resourceData?.features is json {
-        featuresJson = resourceData?.features.toJsonString();
-    }
+    featuresJson = resourceData?.features.toJsonString();
 
     return `
         INSERT INTO 
@@ -97,10 +95,8 @@ isolated function updateResourceQuery(UpdateResource updateResource) returns sql
         setParts.push(`capacity = ${updateResource.capacity}`);
     }
     
-    if updateResource?.features is json {
-        string featuresJson = updateResource?.features.toJsonString();
-        setParts.push(`features = ${featuresJson}`);
-    }
+    string featuresJson = updateResource?.features.toJsonString();
+    setParts.push(`features = ${featuresJson}`);
     
     if updateResource.location is string {
         setParts.push(`location = ${updateResource.location}`);

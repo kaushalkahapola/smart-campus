@@ -67,31 +67,30 @@ isolated function getBookingsByUserQuery(string userId, BookingFilter? filter = 
 # + return - SQL query with parameters
 isolated function getBookingsByResourceQuery(string resourceId, BookingFilter? filter = (), int 'limit = 20, int offset = 0) returns sql:ParameterizedQuery {
     sql:ParameterizedQuery baseQuery = `SELECT 
-        b.id, b.user_id, b.resource_id, b.title, b.description, b.start_time, b.end_time, 
-        b.status, b.purpose, b.attendees_count, b.special_requirements, b.approval_needed,
-        b.approved_by, b.approved_at, b.check_in_time, b.check_out_time, b.actual_attendees,
-        b.feedback_rating, b.feedback_comment, b.recurring_pattern, b.recurring_end_date,
-        b.parent_booking_id, b.created_at, b.updated_at
-    FROM bookings b
-    LEFT JOIN users u ON b.user_id = u.id
+        id, user_id, resource_id, title, description, start_time, end_time, 
+        status, purpose, attendees_count, special_requirements, approval_needed,
+        approved_by, approved_at, check_in_time, check_out_time, actual_attendees,
+        feedback_rating, feedback_comment, recurring_pattern, recurring_end_date,
+        parent_booking_id, created_at, updated_at
+    FROM bookings
     WHERE resource_id = ${resourceId}`;
     
     if filter is BookingFilter {
         if filter.status is BookingStatus {
-            baseQuery = sql:queryConcat(baseQuery, ` AND b.status = ${filter.status}`);
+            baseQuery = sql:queryConcat(baseQuery, ` AND status = ${filter.status}`);
         }
         if filter.startDateFrom is time:Date {
-            baseQuery = sql:queryConcat(baseQuery, ` AND DATE(b.start_time) >= ${filter.startDateFrom}`);
+            baseQuery = sql:queryConcat(baseQuery, ` AND DATE(start_time) >= ${filter.startDateFrom}`);
         }
         if filter.startDateTo is time:Date {
-            baseQuery = sql:queryConcat(baseQuery, ` AND DATE(b.start_time) <= ${filter.startDateTo}`);
+            baseQuery = sql:queryConcat(baseQuery, ` AND DATE(start_time) <= ${filter.startDateTo}`);
         }
-        if filter.username is string {
-            baseQuery = sql:queryConcat(baseQuery, ` AND u.email = ${filter.username}`);
+        if filter.userId is string {
+            baseQuery = sql:queryConcat(baseQuery, ` AND user_id = ${filter.userId}`);
         }
     }
 
-    return sql:queryConcat(baseQuery, ` ORDER BY b.start_time ASC LIMIT ${'limit} OFFSET ${offset}`);
+    return sql:queryConcat(baseQuery, ` ORDER BY start_time ASC LIMIT ${'limit} OFFSET ${offset}`);
 }
 
 # Generate SQL query to add a new booking
@@ -186,19 +185,15 @@ isolated function deleteBookingQuery(string bookingId) returns sql:Parameterized
 isolated function checkConflictsQuery(string resourceId, time:Civil startTime, time:Civil endTime, string? excludeBookingId = ()) returns sql:ParameterizedQuery {
     sql:ParameterizedQuery baseQuery = `SELECT 
         id, title, start_time, end_time, user_id
-    FROM bookings 
-    WHERE resource_id = ${resourceId} 
+    FROM bookings
+    WHERE resource_id = ${resourceId}
         AND status NOT IN ('cancelled', 'no_show', 'completed')
-        AND (
-            (start_time <= ${startTime} AND end_time > ${startTime}) OR
-            (start_time < ${endTime} AND end_time >= ${endTime}) OR
-            (start_time >= ${startTime} AND end_time <= ${endTime})
-        )`;
-    
+        AND (start_time < ${endTime} AND end_time > ${startTime})`;
+
     if excludeBookingId is string {
         baseQuery = sql:queryConcat(baseQuery, ` AND id != ${excludeBookingId}`);
     }
-    
+
     return sql:queryConcat(baseQuery, ` ORDER BY start_time ASC`);
 }
 
@@ -210,31 +205,30 @@ isolated function checkConflictsQuery(string resourceId, time:Civil startTime, t
 # + return - SQL query with parameters
 isolated function getUpcomingBookingsQuery(BookingFilter? filter = (), int 'limit = 20, int offset = 0) returns sql:ParameterizedQuery {
     sql:ParameterizedQuery baseQuery = `SELECT 
-        b.id, u.email as user_email, b.resource_id, b.title, b.description, b.start_time, b.end_time, 
-        b.status, b.purpose, b.attendees_count, b.special_requirements, b.approval_needed,
-        b.approved_by, b.approved_at, b.check_in_time, b.check_out_time, b.actual_attendees,
-        b.feedback_rating, b.feedback_comment, b.recurring_pattern, b.recurring_end_date,
-        b.parent_booking_id, b.created_at, b.updated_at
-    FROM bookings b
-    LEFT JOIN users u ON b.user_id = u.id
-    WHERE b.start_time > NOW()`;
+        id, user_id, resource_id, title, description, start_time, end_time, 
+        status, purpose, attendees_count, special_requirements, approval_needed,
+        approved_by, approved_at, check_in_time, check_out_time, actual_attendees,
+        feedback_rating, feedback_comment, recurring_pattern, recurring_end_date,
+        parent_booking_id, created_at, updated_at
+    FROM bookings
+    WHERE start_time > NOW()`;
 
     if filter is BookingFilter {
-        if filter.username is string {
-            baseQuery = sql:queryConcat(baseQuery, ` AND u.email = ${filter.username}`);
+        if filter.userId is string {
+            baseQuery = sql:queryConcat(baseQuery, ` AND user_id = ${filter.userId}`);
         }
         if filter.resourceId is string {
-            baseQuery = sql:queryConcat(baseQuery, ` AND b.resource_id = ${filter.resourceId}`);
+            baseQuery = sql:queryConcat(baseQuery, ` AND resource_id = ${filter.resourceId}`);
         }
         if filter.status is BookingStatus {
-            baseQuery = sql:queryConcat(baseQuery, ` AND b.status = ${filter.status}`);
+            baseQuery = sql:queryConcat(baseQuery, ` AND status = ${filter.status}`);
         }
         if filter.approvalNeeded is boolean {
-            baseQuery = sql:queryConcat(baseQuery, ` AND b.approval_needed = ${filter.approvalNeeded}`);
+            baseQuery = sql:queryConcat(baseQuery, ` AND approval_needed = ${filter.approvalNeeded}`);
         }
     }
 
-    return sql:queryConcat(baseQuery, ` ORDER BY b.start_time ASC LIMIT ${'limit} OFFSET ${offset}`);
+    return sql:queryConcat(baseQuery, ` ORDER BY start_time ASC LIMIT ${'limit} OFFSET ${offset}`);
 }
 
 # Generate SQL query to get booking count
@@ -242,33 +236,33 @@ isolated function getUpcomingBookingsQuery(BookingFilter? filter = (), int 'limi
 # + filter - Optional filter parameters
 # + return - SQL query with parameters
 isolated function getBookingCountQuery(BookingFilter? filter = ()) returns sql:ParameterizedQuery {
-    sql:ParameterizedQuery baseQuery = `SELECT COUNT(*) as count FROM bookings b LEFT JOIN users u ON b.user_id = u.id WHERE 1=1`;
+    sql:ParameterizedQuery baseQuery = `SELECT COUNT(*) as count FROM bookings WHERE 1=1`;
 
     if filter is BookingFilter {
-        if filter.username is string {
-            baseQuery = sql:queryConcat(baseQuery, ` AND u.email = ${filter.username}`);
+        if filter.userId is string {
+            baseQuery = sql:queryConcat(baseQuery, ` AND user_id = ${filter.userId}`);
         }
         if filter.resourceId is string {
-            baseQuery = sql:queryConcat(baseQuery, ` AND b.resource_id = ${filter.resourceId}`);
+            baseQuery = sql:queryConcat(baseQuery, ` AND resource_id = ${filter.resourceId}`);
         }
         if filter.status is BookingStatus {
-            baseQuery = sql:queryConcat(baseQuery, ` AND b.status = ${filter.status}`);
+            baseQuery = sql:queryConcat(baseQuery, ` AND status = ${filter.status}`);
         }
         if filter.startDateFrom is time:Date {
-            baseQuery = sql:queryConcat(baseQuery, ` AND DATE(b.start_time) >= ${filter.startDateFrom}`);
+            baseQuery = sql:queryConcat(baseQuery, ` AND DATE(start_time) >= ${filter.startDateFrom}`);
         }
         if filter.startDateTo is time:Date {
-            baseQuery = sql:queryConcat(baseQuery, ` AND DATE(b.start_time) <= ${filter.startDateTo}`);
+            baseQuery = sql:queryConcat(baseQuery, ` AND DATE(start_time) <= ${filter.startDateTo}`);
         }
         if filter.approvalNeeded is boolean {
-            baseQuery = sql:queryConcat(baseQuery, ` AND b.approval_needed = ${filter.approvalNeeded}`);
+            baseQuery = sql:queryConcat(baseQuery, ` AND approval_needed = ${filter.approvalNeeded}`);
         }
         if filter.recurringOnly is boolean && filter.recurringOnly == true {
-            baseQuery = sql:queryConcat(baseQuery, ` AND b.recurring_pattern IS NOT NULL`);
+            baseQuery = sql:queryConcat(baseQuery, ` AND recurring_pattern IS NOT NULL`);
         }
         if filter.searchTerm is string && filter.searchTerm != "" {
             string searchPattern = "%" + <string>filter.searchTerm + "%";
-            baseQuery = sql:queryConcat(baseQuery, ` AND (b.title LIKE ${searchPattern} OR b.description LIKE ${searchPattern})`);
+            baseQuery = sql:queryConcat(baseQuery, ` AND (title LIKE ${searchPattern} OR description LIKE ${searchPattern})`);
         }
     }
     

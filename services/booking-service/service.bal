@@ -4,6 +4,7 @@ import booking_service.db;
 import ballerina/http;
 import ballerina/log;
 import ballerina/time;
+import ballerina/data.jsondata;
 
 # Interceptor to handle errors in the response
 service class ErrorInterceptor {
@@ -43,7 +44,7 @@ service http:InterceptableService / on new http:Listener(9094) {
     # Admin list all bookings with filtering - Admin and Staff only
     # + status - Filter by booking status (optional)
     # + resourceId - Filter by resource ID (optional)
-    # + username - Filter by user ID (optional)
+    # + userId - Filter by user ID (optional)
     # + startDate - Filter by start date from (optional)
     # + endDate - Filter by start date to (optional)
     # + page - Page number for pagination (optional)
@@ -51,7 +52,7 @@ service http:InterceptableService / on new http:Listener(9094) {
     # + return - Returns list of all bookings
     resource function get admin/bookings(string? status = (),
                                          string? resourceId = (),
-                                         string? username = (),
+                                         string? userId = (),
                                          string? startDate = (),
                                          string? endDate = (),
                                          int page = 1,
@@ -62,7 +63,7 @@ service http:InterceptableService / on new http:Listener(9094) {
         
         // Build filter
         db:BookingFilter? filter = ();
-        if status is string || resourceId is string || username is string || startDate is string || endDate is string {
+        if status is string || resourceId is string || userId is string || startDate is string || endDate is string {
             db:BookingStatus? bookingStatus = ();
             if status is string {
                 bookingStatus = status == "pending" ? db:PENDING : 
@@ -89,7 +90,7 @@ service http:InterceptableService / on new http:Listener(9094) {
             }
             
             filter = {
-                username: username,
+                userId: userId,
                 resourceId: resourceId,
                 status: bookingStatus,
                 startDateFrom: startDateFilter,
@@ -143,8 +144,16 @@ service http:InterceptableService / on new http:Listener(9094) {
     # + action - Action to take: "approve" or "reject"
     # + return - Returns approval result
     resource function patch admin/bookings/[string bookingId]/[string action](http:Request httpReq) returns BookingUpdatedResponse|NotFoundResponse|BadRequestResponse|InternalServerErrorResponse|http:HeaderNotFoundError {
-        
-        string userId = check httpReq.getHeader("X-User-Id");
+
+        string|error userId = getUserIdFromRequest(httpReq);
+        if userId is error {
+            return <NotFoundResponse> {
+                body: {
+                    errorMessage: "User ID not found",
+                    details: userId.message()
+                }
+            };
+        }
         string username = check httpReq.getHeader("X-Username");
         
         log:printInfo("Admin " + action + " booking: " + bookingId + " by: " + username);
@@ -327,10 +336,17 @@ service http:InterceptableService / on new http:Listener(9094) {
     # Create a new booking
     # + req - The HTTP request with booking data
     # + return - Returns booking creation result
-    resource function post bookings(CreateBookingRequest req, http:Request httpReq) returns BookingCreatedResponse|BadRequestResponse|ConflictResponse|InternalServerErrorResponse|http:HeaderNotFoundError {
+    resource function post bookings(CreateBookingRequest req, http:Request httpReq) returns BookingCreatedResponse|BadRequestResponse|ConflictResponse|InternalServerErrorResponse|NotFoundResponse|http:HeaderNotFoundError {
         
-        string userId = check httpReq.getHeader("X-User-Id");
-        log:printInfo("Creating booking for user: " + userId + ", resource: " + req.resourceId);
+        string|error userId = getUserIdFromRequest(httpReq);
+        if userId is error {
+            return <NotFoundResponse> {
+                body: {
+                    errorMessage: "User ID not found",
+                    details: userId.message()
+                }
+            };
+        }
         
         // Validate booking request
         error? validationResult = validateBookingRequest(req);
@@ -422,10 +438,18 @@ service http:InterceptableService / on new http:Listener(9094) {
                                    string? endDate = (),
                                    int page = 1,
                                    int pageSize = 20) 
-        returns BookingListResponse|InternalServerErrorResponse|http:HeaderNotFoundError {
+        returns BookingListResponse|InternalServerErrorResponse|http:HeaderNotFoundError|NotFoundResponse {
 
-        string username = check req.getHeader("X-Username");
-        log:printInfo("Fetching bookings for user: " + username);
+        string|error userId = getUserIdFromRequest(req);
+        if userId is error {
+            return <NotFoundResponse> {
+                body: {
+                    errorMessage: "User ID not found",
+                    details: userId.message()
+                }
+            };
+        }
+        log:printInfo("Fetching bookings for user: " + userId);
 
         // Build filter
         db:BookingFilter? filter = ();
@@ -457,7 +481,7 @@ service http:InterceptableService / on new http:Listener(9094) {
             }
             
             filter = {
-                username: username,
+                userId: userId,
                 resourceId: resourceId,
                 status: bookingStatus,
                 startDateFrom: startDateFilter,
@@ -468,7 +492,7 @@ service http:InterceptableService / on new http:Listener(9094) {
             };
         } else {
             filter = {
-                username: username,
+                userId: userId,
                 resourceId: null,
                 status: null,
                 startDateFrom: null,
@@ -480,7 +504,7 @@ service http:InterceptableService / on new http:Listener(9094) {
         }
         
         // Get bookings from database
-        db:Booking[]|error bookings = db:getBookingsByUser(username, filter, page, pageSize);
+        db:Booking[]|error bookings = db:getBookingsByUser(userId, filter, page, pageSize);
         if bookings is error {
             log:printError("Error fetching bookings: " + bookings.message());
             return <InternalServerErrorResponse> {
@@ -501,7 +525,7 @@ service http:InterceptableService / on new http:Listener(9094) {
         int|error totalCount = db:getBookingCount(filter);
         int total = totalCount is error ? 0 : totalCount;
 
-        log:printInfo("Successfully fetched " + bookings.length().toString() + " bookings for user: " + username);
+        log:printInfo("Successfully fetched " + bookings.length().toString() + " bookings for user: " + userId);
         return <BookingListResponse> {
             body: {
                 message: "Bookings fetched successfully",
@@ -521,12 +545,30 @@ service http:InterceptableService / on new http:Listener(9094) {
     # + httpReq - The HTTP request
     # + return - Returns booking details
     resource function get bookings/[string bookingId](http:Request httpReq) returns BookingDetailsResponse|NotFoundResponse|ForbiddenResponse|InternalServerErrorResponse|http:HeaderNotFoundError {
-        
-        string userId = check httpReq.getHeader("X-User-Id");
+        string|error userId = getUserIdFromRequest(httpReq);
+        if userId is error {
+            return <NotFoundResponse> {
+                body: {
+                    errorMessage: "User ID not found",
+                    details: userId.message()
+                }
+            };
+        }
         string username = check httpReq.getHeader("X-Username");
-        string role = check httpReq.getHeader("X-User-Role");
-        string department = check httpReq.getHeader("X-User-Department");
-        
+        string groups = check httpReq.getHeader("X-User-Groups");
+
+        string[]|error groupsList = jsondata:parseString(groups);
+
+        if groupsList is error {
+            log:printError("Error parsing user groups: " + groupsList.message());
+            return <InternalServerErrorResponse> {
+                body: {
+                    errorMessage: "Failed to parse user groups",
+                    details: groupsList.message()
+                }
+            };
+        }
+
         log:printInfo("Fetching booking: " + bookingId + " for user: " + username);
         
         // Get booking from database
@@ -544,13 +586,7 @@ service http:InterceptableService / on new http:Listener(9094) {
         // Check access permissions
         auth:UserInfo userInfo = {
             userId: userId,
-            username: username,
-            email: username,
-            firstName: "User",
-            lastName: "Name",
-            role: role,
-            department: department,
-            groups: [role]
+            groups: groupsList
         };
         
         if !canAccessBooking(booking, userInfo) {
@@ -580,10 +616,29 @@ service http:InterceptableService / on new http:Listener(9094) {
     # + return - Returns booking update result
     resource function patch bookings/[string bookingId](UpdateBookingRequest req, http:Request httpReq) returns BookingUpdatedResponse|NotFoundResponse|ForbiddenResponse|BadRequestResponse|ConflictResponse|InternalServerErrorResponse|http:HeaderNotFoundError {
         
-        string userId = check httpReq.getHeader("X-User-Id");
+        string|error userId = getUserIdFromRequest(httpReq);
+        if userId is error {
+            return <NotFoundResponse> {
+                body: {
+                    errorMessage: "User ID not found",
+                    details: userId.message()
+                }
+            };
+        }
         string username = check httpReq.getHeader("X-Username");
-        string role = check httpReq.getHeader("X-User-Role");
-        string department = check httpReq.getHeader("X-User-Department");
+        string groups = check httpReq.getHeader("X-User-Groups");
+
+        string[]|error groupsList = jsondata:parseString(groups);
+
+        if groupsList is error {
+            log:printError("Error parsing user groups: " + groupsList.message());
+            return <InternalServerErrorResponse> {
+                body: {
+                    errorMessage: "Failed to parse user groups",
+                    details: groupsList.message()
+                }
+            };
+        }
         
         log:printInfo("Updating booking: " + bookingId + " for user: " + username);
         
@@ -602,13 +657,7 @@ service http:InterceptableService / on new http:Listener(9094) {
         // Check modification permissions
         auth:UserInfo userInfo = {
             userId: userId,
-            username: username,
-            email: username,
-            firstName: "User",
-            lastName: "Name",
-            role: role,
-            department: department,
-            groups: [role]
+            groups: groupsList
         };
         
         if !canModifyBooking(existingBooking, userInfo) {
@@ -702,11 +751,30 @@ service http:InterceptableService / on new http:Listener(9094) {
     # + httpReq - The HTTP request
     # + return - Returns booking cancellation result
     resource function delete bookings/[string bookingId](http:Request httpReq) returns BookingDeletedResponse|NotFoundResponse|ForbiddenResponse|InternalServerErrorResponse|http:HeaderNotFoundError {
-        
-        string userId = check httpReq.getHeader("X-User-Id");
+
+        string|error userId = getUserIdFromRequest(httpReq);
+        if userId is error {
+            return <NotFoundResponse> {
+                body: {
+                    errorMessage: "User ID not found",
+                    details: userId.message()
+                }
+            };
+        }
         string username = check httpReq.getHeader("X-Username");
-        string role = check httpReq.getHeader("X-User-Role");
-        string department = check httpReq.getHeader("X-User-Department");
+        string groups = check httpReq.getHeader("X-User-Groups");
+
+        string[]|error groupsList = jsondata:parseString(groups);
+
+        if groupsList is error {
+            log:printError("Error parsing user groups: " + groupsList.message());
+            return <InternalServerErrorResponse> {
+                body: {
+                    errorMessage: "Failed to parse user groups",
+                    details: groupsList.message()
+                }
+            };
+        }
         
         log:printInfo("Cancelling booking: " + bookingId + " for user: " + username);
         
@@ -725,13 +793,7 @@ service http:InterceptableService / on new http:Listener(9094) {
         // Check modification permissions
         auth:UserInfo userInfo = {
             userId: userId,
-            username: username,
-            email: username,
-            firstName: "User",
-            lastName: "Name",
-            role: role,
-            department: department,
-            groups: [role]
+            groups: groupsList
         };
         
         if !canModifyBooking(existingBooking, userInfo) {
