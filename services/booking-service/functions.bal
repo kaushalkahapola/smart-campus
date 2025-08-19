@@ -62,7 +62,7 @@ function parseDateTime(string isoString) returns time:Civil|error {
 #
 # + isoString - ISO format date string
 # + return - Date or error
-function parseDate(string isoString) returns time:Date|error {
+isolated function parseDate(string isoString) returns time:Date|error {
     // TODO: Implement proper ISO date parsing
     // For now, return a mock Date
     return {
@@ -76,7 +76,7 @@ function parseDate(string isoString) returns time:Date|error {
 #
 # + civil - Civil time
 # + return - ISO format datetime string
-function formatDateTime(time:Civil civil) returns string {
+isolated function formatDateTime(time:Civil civil) returns string {
     // TODO: Implement proper ISO datetime formatting
     return "2025-08-18T10:00:00Z";
 }
@@ -85,7 +85,7 @@ function formatDateTime(time:Civil civil) returns string {
 #
 # + date - Date
 # + return - ISO format date string
-function formatDate(time:Date date) returns string {
+isolated function formatDate(time:Date date) returns string {
     // TODO: Implement proper ISO date formatting
     return "2025-08-18";
 }
@@ -203,7 +203,7 @@ function canModifyBooking(db:Booking booking, auth:UserInfo userInfo) returns bo
 # Get current timestamp as string
 #
 # + return - Current timestamp
-function getCurrentTimestamp() returns string {
+isolated function getCurrentTimestamp() returns string {
     // TODO: Implement proper timestamp formatting
     return "2025-08-18T10:00:00Z";
 }

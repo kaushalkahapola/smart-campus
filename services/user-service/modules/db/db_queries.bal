@@ -246,10 +246,8 @@ isolated function updateUserQuery(UpdateUser updateUser) returns sql:Parameteriz
         setParts.push(`student_id = ${updateUser.studentId}`);
     }
     
-    if updateUser.preferences is json {
-        string preferencesString = updateUser.preferences.toString();
-        setParts.push(`preferences = ${preferencesString}`);
-    }
+    string preferencesString = updateUser.preferences.toString();
+    setParts.push(`preferences = ${preferencesString}`);
     
     if updateUser.isActive is boolean {
         setParts.push(`is_active = ${updateUser.isActive}`);

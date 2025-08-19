@@ -799,7 +799,7 @@ service http:InterceptableService /api on new http:Listener(9090) {
     # + ctx - The HTTP request context
     # + caller - The HTTP caller to respond to.
     # + return - Returns the created booking information
-    resource function post bookings(http:RequestContext ctx, http:Caller caller) returns error? {
+    resource function post bookings(http:RequestContext ctx, http:Caller caller, http:Request req) returns error? {
 
         // Prepare headers for the booking service call
         map<string> headers = {
@@ -809,8 +809,243 @@ service http:InterceptableService /api on new http:Listener(9090) {
             "Authorization": "Bearer " + ctx.get("m2mToken").toString()
         };
 
+        json|error payload = req.getJsonPayload();
+        if payload is error {
+            log:printError("Error parsing booking data: " + payload.message());
+            return caller->respond(createBadRequestError("Invalid booking data"));
+        }
+
         log:printInfo("Forwarding POST /bookings request to booking service");
-        http:Response|error response = bookingServiceClient->post("/bookings", (), headers = headers);
+        http:Response|error response = bookingServiceClient->post("/bookings", payload, headers = headers);
+        if response is http:Response {
+            return caller->respond(response);
+        } else {
+            log:printError("Error calling booking service: " + response.message());
+            return caller->respond(createInternalServerError());
+        }
+    }
+
+    # Booking Service - Get all bookings
+    #
+    # + ctx - The HTTP request context
+    # + caller - The HTTP caller to respond to.
+    # + return - Returns the list of bookings
+    resource function get bookings(http:RequestContext ctx, http:Caller caller) returns error? {
+
+        // Prepare headers for the booking service call
+        map<string> headers = {
+            "X-User-Id": ctx.get("userId").toString(),
+            "X-Username": ctx.get("username").toString(),
+            "X-User-Groups": ctx.get("userGroups").toString(),
+            "Authorization": "Bearer " + ctx.get("m2mToken").toString()
+        };
+
+        log:printInfo("Forwarding GET /bookings request to booking service");
+        http:Response|error response = bookingServiceClient->get("/bookings", headers = headers);
+        if response is http:Response {
+            return caller->respond(response);
+        } else {
+            log:printError("Error calling booking service: " + response.message());
+            return caller->respond(createInternalServerError());
+        }
+    }
+
+    # Booking Service - Get a specific booking
+    #
+    # + ctx - The HTTP request context
+    # + caller - The HTTP caller to respond to.
+    # + bookingId - The ID of the booking to retrieve
+    # + return - Returns the booking information
+    resource function get bookings/[string bookingId](http:RequestContext ctx, http:Caller caller) returns error? {
+
+        // Prepare headers for the booking service call
+        map<string> headers = {
+            "X-User-Id": ctx.get("userId").toString(),
+            "X-Username": ctx.get("username").toString(),
+            "X-User-Groups": ctx.get("userGroups").toString(),
+            "Authorization": "Bearer " + ctx.get("m2mToken").toString()
+        };
+
+        log:printInfo("Forwarding GET /bookings/" + bookingId + " request to booking service");
+        http:Response|error response = bookingServiceClient->get("/bookings/" + bookingId, headers = headers);
+        if response is http:Response {
+            return caller->respond(response);
+        } else {
+            log:printError("Error calling booking service: " + response.message());
+            return caller->respond(createInternalServerError());
+        }
+    }
+
+    # Booking Service - Update a specific booking
+    #
+    # + ctx - The HTTP request context
+    # + caller - The HTTP caller to respond to.
+    # + bookingId - The ID of the booking to update
+    # + return - Returns the updated booking information
+    resource function patch bookings/[string bookingId](http:RequestContext ctx, http:Caller caller, http:Request req) returns error? {
+
+        // Prepare headers for the booking service call
+        map<string> headers = {
+            "X-User-Id": ctx.get("userId").toString(),
+            "X-Username": ctx.get("username").toString(),
+            "X-User-Groups": ctx.get("userGroups").toString(),
+            "Authorization": "Bearer " + ctx.get("m2mToken").toString()
+        };
+
+        json|error payload = req.getJsonPayload();
+        if payload is error {
+            log:printError("Error parsing booking data: " + payload.message());
+            return caller->respond(createBadRequestError("Invalid booking data"));
+        }
+
+        log:printInfo("Forwarding PATCH /bookings/" + bookingId + " request to booking service");
+        http:Response|error response = bookingServiceClient->patch("/bookings/" + bookingId, payload, headers = headers);
+        if response is http:Response {
+            return caller->respond(response);
+        } else {
+            log:printError("Error calling booking service: " + response.message());
+            return caller->respond(createInternalServerError());
+        }
+    }
+
+    # Booking Service - Delete a specific booking
+    #
+    # + ctx - The HTTP request context
+    # + caller - The HTTP caller to respond to.
+    # + bookingId - The ID of the booking to delete
+    # + return - Returns a success message
+    resource function delete bookings/[string bookingId](http:RequestContext ctx, http:Caller caller) returns error? {
+
+        // Prepare headers for the booking service call
+        map<string> headers = {
+            "X-User-Id": ctx.get("userId").toString(),
+            "X-Username": ctx.get("username").toString(),
+            "X-User-Groups": ctx.get("userGroups").toString(),
+            "Authorization": "Bearer " + ctx.get("m2mToken").toString()
+        };
+
+        log:printInfo("Forwarding DELETE /bookings/" + bookingId + " request to booking service");
+        http:Response|error response = bookingServiceClient->delete("/bookings/" + bookingId, headers = headers);
+        if response is http:Response {
+            return caller->respond(response);
+        } else {
+            log:printError("Error calling booking service: " + response.message());
+            return caller->respond(createInternalServerError());
+        }
+    }
+
+    # Booking Service - Check booking conflicts
+    #
+    # + ctx - The HTTP request context
+    # + caller - The HTTP caller to respond to.
+    # + resourceId - The ID of the resource to check
+    # + return - Returns a list of conflicting bookings
+    resource function get conflicts/[string resourceId](http:RequestContext ctx, http:Caller caller) returns error? {
+
+        // Prepare headers for the booking service call
+        map<string> headers = {
+            "X-User-Id": ctx.get("userId").toString(),
+            "X-Username": ctx.get("username").toString(),
+            "X-User-Groups": ctx.get("userGroups").toString(),
+            "Authorization": "Bearer " + ctx.get("m2mToken").toString()
+        };
+
+        log:printInfo("Forwarding GET /conflicts/" + resourceId + " request to booking service");
+        http:Response|error response = bookingServiceClient->get("/conflicts/" + resourceId, headers = headers);
+        if response is http:Response {
+            return caller->respond(response);
+        } else {
+            log:printError("Error calling booking service: " + response.message());
+            return caller->respond(createInternalServerError());
+        }
+    }
+
+    # Booking Service - Check availability of resource
+    #
+    # + ctx - The HTTP request context
+    # + caller - The HTTP caller to respond to.
+    # + resourceId - The ID of the resource to check
+    # + return - Returns the availability status of the resource
+    resource function get availability/[string resourceId](http:RequestContext ctx, http:Caller caller) returns error? {
+
+        // Prepare headers for the booking service call
+        map<string> headers = {
+            "X-User-Id": ctx.get("userId").toString(),
+            "X-Username": ctx.get("username").toString(),
+            "X-User-Groups": ctx.get("userGroups").toString(),
+            "Authorization": "Bearer " + ctx.get("m2mToken").toString()
+        };
+
+        log:printInfo("Forwarding GET /availability/" + resourceId + " request to booking service");
+        http:Response|error response = bookingServiceClient->get("/availability/" + resourceId, headers = headers);
+        if response is http:Response {
+            return caller->respond(response);
+        } else {
+            log:printError("Error calling booking service: " + response.message());
+            return caller->respond(createInternalServerError());
+        }
+    }
+
+    # Booking Service - Admin list all bookings
+    #
+    # + ctx - The HTTP request context
+    # + caller - The HTTP caller to respond to.
+    # + return - Returns a list of all bookings
+    resource function get admin/bookings(http:RequestContext ctx, http:Caller caller) returns error? {
+
+        // Check RBAC: Only admin can schedule maintenance
+        string userGroups = ctx.get("userGroups").toString();
+        string[] requiredGroups = [auth:authorizedRoles.Admin];
+        if (!auth:hasRequiredAccess(userGroups, requiredGroups)) {
+            log:printError("Access denied: Admin access required for scheduling maintenance");
+            return caller->respond(createForbiddenError("Admin access required to schedule resource maintenance"));
+        }
+
+        // Prepare headers for the booking service call
+        map<string> headers = {
+            "X-User-Id": ctx.get("userId").toString(),
+            "X-Username": ctx.get("username").toString(),
+            "X-User-Groups": ctx.get("userGroups").toString(),
+            "Authorization": "Bearer " + ctx.get("m2mToken").toString()
+        };
+
+        log:printInfo("Forwarding GET /admin/bookings request to booking service");
+        http:Response|error response = bookingServiceClient->get("/admin/bookings", headers = headers);
+        if response is http:Response {
+            return caller->respond(response);
+        } else {
+            log:printError("Error calling booking service: " + response.message());
+            return caller->respond(createInternalServerError());
+        }
+    }
+
+    # Booking Service - Admin 'approve' or 'reject' booking
+    #
+    # + ctx - The HTTP request context
+    # + caller - The HTTP caller to respond to.
+    # + bookingId - The ID of the booking to approve or reject
+    # + action - The action to perform (approve or reject)
+    # + return - Returns the result of the approval or rejection
+    resource function post admin/bookings/[string bookingId]/[string action](http:RequestContext ctx, http:Caller caller) returns error? {
+
+        // Check RBAC: Only admin can approve or reject bookings
+        string userGroups = ctx.get("userGroups").toString();
+        string[] requiredGroups = [auth:authorizedRoles.Admin];
+        if (!auth:hasRequiredAccess(userGroups, requiredGroups)) {
+            log:printError("Access denied: Admin access required for approving or rejecting bookings");
+            return caller->respond(createForbiddenError("Admin access required to approve or reject bookings"));
+        }
+
+        // Prepare headers for the booking service call
+        map<string> headers = {
+            "X-User-Id": ctx.get("userId").toString(),
+            "X-Username": ctx.get("username").toString(),
+            "X-User-Groups": ctx.get("userGroups").toString(),
+            "Authorization": "Bearer " + ctx.get("m2mToken").toString()
+        };
+
+        log:printInfo("Forwarding POST /admin/bookings/" + bookingId + "/" + action + " request to booking service");
+        http:Response|error response = bookingServiceClient->patch("/admin/bookings/" + bookingId + "/" + action, (), headers = headers);
         if response is http:Response {
             return caller->respond(response);
         } else {

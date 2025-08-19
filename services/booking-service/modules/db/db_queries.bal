@@ -5,7 +5,7 @@ import ballerina/time;
 #
 # + bookingId - The booking ID to search for
 # + return - SQL query with parameters
-public function getBookingByIdQuery(string bookingId) returns sql:ParameterizedQuery {
+isolated function getBookingByIdQuery(string bookingId) returns sql:ParameterizedQuery {
     return `SELECT 
         id, user_id, resource_id, title, description, start_time, end_time, 
         status, purpose, attendees_count, special_requirements, approval_needed,
@@ -23,7 +23,7 @@ public function getBookingByIdQuery(string bookingId) returns sql:ParameterizedQ
 # + 'limit - Maximum number of results
 # + offset - Offset for pagination
 # + return - SQL query with parameters
-public function getBookingsByUserQuery(string userId, BookingFilter? filter = (), int 'limit = 20, int offset = 0) returns sql:ParameterizedQuery {
+isolated function getBookingsByUserQuery(string userId, BookingFilter? filter = (), int 'limit = 20, int offset = 0) returns sql:ParameterizedQuery {
     sql:ParameterizedQuery baseQuery = `SELECT 
         id, user_id, resource_id, title, description, start_time, end_time, 
         status, purpose, attendees_count, special_requirements, approval_needed,
@@ -65,7 +65,7 @@ public function getBookingsByUserQuery(string userId, BookingFilter? filter = ()
 # + 'limit - Maximum number of results
 # + offset - Offset for pagination
 # + return - SQL query with parameters
-public function getBookingsByResourceQuery(string resourceId, BookingFilter? filter = (), int 'limit = 20, int offset = 0) returns sql:ParameterizedQuery {
+isolated function getBookingsByResourceQuery(string resourceId, BookingFilter? filter = (), int 'limit = 20, int offset = 0) returns sql:ParameterizedQuery {
     sql:ParameterizedQuery baseQuery = `SELECT 
         b.id, b.user_id, b.resource_id, b.title, b.description, b.start_time, b.end_time, 
         b.status, b.purpose, b.attendees_count, b.special_requirements, b.approval_needed,
@@ -98,7 +98,7 @@ public function getBookingsByResourceQuery(string resourceId, BookingFilter? fil
 #
 # + booking - The booking data to insert
 # + return - SQL query with parameters
-public function addBookingQuery(CreateBooking booking) returns sql:ParameterizedQuery {
+isolated function addBookingQuery(CreateBooking booking) returns sql:ParameterizedQuery {
     return `INSERT INTO bookings (
         id, user_id, resource_id, title, description, start_time, end_time,
         status, purpose, attendees_count, special_requirements, approval_needed,
@@ -116,7 +116,7 @@ public function addBookingQuery(CreateBooking booking) returns sql:Parameterized
 #
 # + booking - The booking data to update
 # + return - SQL query with parameters
-public function updateBookingQuery(UpdateBooking booking) returns sql:ParameterizedQuery {
+isolated function updateBookingQuery(UpdateBooking booking) returns sql:ParameterizedQuery {
     sql:ParameterizedQuery baseQuery = `UPDATE bookings SET updated_at = NOW()`;
     
     if booking.title is string {
@@ -172,7 +172,7 @@ public function updateBookingQuery(UpdateBooking booking) returns sql:Parameteri
 #
 # + bookingId - The booking ID to delete
 # + return - SQL query with parameters
-public function deleteBookingQuery(string bookingId) returns sql:ParameterizedQuery {
+isolated function deleteBookingQuery(string bookingId) returns sql:ParameterizedQuery {
     return `DELETE FROM bookings WHERE id = ${bookingId}`;
 }
 
@@ -183,7 +183,7 @@ public function deleteBookingQuery(string bookingId) returns sql:ParameterizedQu
 # + endTime - End time of the new booking
 # + excludeBookingId - Optional booking ID to exclude from conflict check
 # + return - SQL query with parameters
-public function checkConflictsQuery(string resourceId, time:Civil startTime, time:Civil endTime, string? excludeBookingId = ()) returns sql:ParameterizedQuery {
+isolated function checkConflictsQuery(string resourceId, time:Civil startTime, time:Civil endTime, string? excludeBookingId = ()) returns sql:ParameterizedQuery {
     sql:ParameterizedQuery baseQuery = `SELECT 
         id, title, start_time, end_time, user_id
     FROM bookings 
@@ -208,7 +208,7 @@ public function checkConflictsQuery(string resourceId, time:Civil startTime, tim
 # + 'limit - Maximum number of results
 # + offset - Offset for pagination
 # + return - SQL query with parameters
-public function getUpcomingBookingsQuery(BookingFilter? filter = (), int 'limit = 20, int offset = 0) returns sql:ParameterizedQuery {
+isolated function getUpcomingBookingsQuery(BookingFilter? filter = (), int 'limit = 20, int offset = 0) returns sql:ParameterizedQuery {
     sql:ParameterizedQuery baseQuery = `SELECT 
         b.id, u.email as user_email, b.resource_id, b.title, b.description, b.start_time, b.end_time, 
         b.status, b.purpose, b.attendees_count, b.special_requirements, b.approval_needed,
@@ -241,7 +241,7 @@ public function getUpcomingBookingsQuery(BookingFilter? filter = (), int 'limit 
 #
 # + filter - Optional filter parameters
 # + return - SQL query with parameters
-public function getBookingCountQuery(BookingFilter? filter = ()) returns sql:ParameterizedQuery {
+isolated function getBookingCountQuery(BookingFilter? filter = ()) returns sql:ParameterizedQuery {
     sql:ParameterizedQuery baseQuery = `SELECT COUNT(*) as count FROM bookings b LEFT JOIN users u ON b.user_id = u.id WHERE 1=1`;
 
     if filter is BookingFilter {
@@ -281,7 +281,7 @@ public function getBookingCountQuery(BookingFilter? filter = ()) returns sql:Par
 # + startDate - Start date for availability check
 # + endDate - End date for availability check
 # + return - SQL query with parameters
-public function getResourceAvailabilityQuery(string resourceId, time:Date startDate, time:Date endDate) returns sql:ParameterizedQuery {
+isolated function getResourceAvailabilityQuery(string resourceId, time:Date startDate, time:Date endDate) returns sql:ParameterizedQuery {
     return `SELECT 
         start_time, end_time, title, status
     FROM bookings 
@@ -296,7 +296,7 @@ public function getResourceAvailabilityQuery(string resourceId, time:Date startD
 #
 # + entry - Waitlist entry data
 # + return - SQL query with parameters
-public function addWaitlistEntryQuery(WaitlistEntry entry) returns sql:ParameterizedQuery {
+isolated function addWaitlistEntryQuery(WaitlistEntry entry) returns sql:ParameterizedQuery {
     return `INSERT INTO waitlist (
         id, user_id, resource_id, desired_start_time, desired_end_time, 
         priority, status, created_at
@@ -311,7 +311,7 @@ public function addWaitlistEntryQuery(WaitlistEntry entry) returns sql:Parameter
 #
 # + resourceId - The resource ID
 # + return - SQL query with parameters
-public function getWaitlistEntriesQuery(string resourceId) returns sql:ParameterizedQuery {
+isolated function getWaitlistEntriesQuery(string resourceId) returns sql:ParameterizedQuery {
     return `SELECT 
         id, user_id, resource_id, desired_start_time, desired_end_time,
         priority, status, created_at, notified_at, expires_at
