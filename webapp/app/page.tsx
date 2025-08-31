@@ -1,58 +1,38 @@
 'use client'
 
-import { SignedIn, SignedOut, SignInButton, SignOutButton, User, UserDropdown, UserProfile } from '@asgardeo/nextjs';
-import { useState, useEffect } from 'react';
-import { getSessionData } from './temp_token';
+import { SignedIn, User } from '@asgardeo/nextjs';
+import Navigation from './components/Navigation';
+import { useEffect } from 'react';
+import { useAuth } from './lib/contexts/AuthContext';
+import { useAppSelector } from './lib/redux/hooks';
+import { selectUser, selectIsAuthenticated } from './lib/redux/slices/authSlice';
 
 export default function Home() {
-  const [sessionData, setSessionData] = useState<{ sessionId: string | null; accessToken: string | null } | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { initialize } = useAuth();
+  const user = useAppSelector(selectUser);
+  const isAuthenticated = useAppSelector(selectIsAuthenticated);
 
   useEffect(() => {
-    const fetchSessionData = async () => {
-      try {
-        const data = await getSessionData();
-        setSessionData(data);
-      } catch (error) {
-        console.error('Error fetching session data:', error);
-        setSessionData({ sessionId: null, accessToken: null });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchSessionData();
+    // Initialize auth context which will console log the token
+    initialize();
   }, []);
 
   return (
     <>
-    <div className="flex flex-col items-center justify-center min-h-screen text-center gap-6">
-      <header className="flex flex-col items-center gap-2">
-        <SignedIn>
-          <UserDropdown />
-          <SignOutButton />
-        </SignedIn>
-        <SignedOut>
-          <SignInButton />
-        </SignedOut>
-      </header>
-      <main className="flex flex-col items-center gap-4">
-        <SignedIn>
-          <User>
-            {(user) => (
-              <div>
-                <p>Welcome back, {user.userName || user.username || user.sub }</p>
-                {loading ? (
-                  <p>Loading token...</p>
-                ) : (
-                  <p>Your accessToken: {sessionData?.accessToken || 'No token available'}</p>
-                )}
-              </div>
-            )}
-          </User>
-          <UserProfile />
-        </SignedIn>
-      </main>
+      <Navigation />
+      <div className="flex flex-col items-center justify-center flex-grow text-center gap-6">
+        <main className="flex flex-col items-center gap-4">
+          <SignedIn>
+            <User>
+              {(user) => (
+                <div>
+                  <p>Welcome back, {user.userName || user.username || user.sub}</p>
+                  <p>You are logged in! Check the console for your access token.</p>
+                </div>
+              )}
+            </User>
+          </SignedIn>
+        </main>
       </div>
     </>
   );
