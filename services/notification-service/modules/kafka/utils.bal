@@ -3,29 +3,28 @@ import ballerina/log;
 import ballerina/uuid;
 import ballerina/time;
 
+# Email notification callback function type
+public type EmailCallback isolated function(EmailNotificationMessage emailMessage) returns error?;
+
+# Email callback holder
+isolated EmailCallback? emailCallback = ();
+
 # Kafka configuration
 configurable string[] bootstrap_servers = ["localhost:9092"];
 configurable string client_id = "notification-service";
 configurable string group_id = "notification-group";
 configurable string auto_offset_reset = "earliest";
 configurable boolean enable_auto_commit = true;
-configurable int auto_commit_interval_ms = 1000;
-configurable int session_timeout_ms = 30000;
+configurable decimal auto_commit_interval_ms = 1000;
+configurable decimal session_timeout_ms = 30000;
 configurable int heartbeat_interval_ms = 10000;
 
 # Topic configuration
 configurable string booking_events = "booking-events";
 configurable string waitlist_events = "waitlist-events";
-configurable string conflict_events = "conflict-events";
-configurable string notification_events = "notification-events";
 configurable string user_events = "user-events";
 configurable string resource_events = "resource-events";
-
-# Callback function type for sending notifications
-public type NotificationCallback isolated function(string userId, NotificationMessage notification) returns error?;
-
-# Global callback for sending notifications
-isolated NotificationCallback? notificationCallback = ();
+configurable string email_events = "email-events";
 
 # Kafka consumer configuration
 final kafka:ConsumerConfiguration & readonly consumerConfig = {
@@ -34,747 +33,583 @@ final kafka:ConsumerConfiguration & readonly consumerConfig = {
     offsetReset: kafka:OFFSET_RESET_EARLIEST,
     autoCommit: enable_auto_commit,
     autoCommitInterval: auto_commit_interval_ms,
-    sessionTimeout: session_timeout_ms,
-    heartbeatInterval: heartbeat_interval_ms
+    sessionTimeout: session_timeout_ms
 };
 
-# Kafka consumer instances
-isolated kafka:Consumer? bookingConsumer = ();
-isolated kafka:Consumer? waitlistConsumer = ();
-isolated kafka:Consumer? conflictConsumer = ();
-isolated kafka:Consumer? notificationConsumer = ();
-isolated kafka:Consumer? userConsumer = ();
-isolated kafka:Consumer? resourceConsumer = ();
 
-# Set the notification callback function
+listener kafka:Listener bookingListener = new (bootstrap_servers, consumerConfig);
+listener kafka:Listener waitlistListener = new (bootstrap_servers, consumerConfig);
+listener kafka:Listener userListener = new (bootstrap_servers, consumerConfig);
+listener kafka:Listener resourceListener = new (bootstrap_servers, consumerConfig);
+
+# Kafka producer for email events
+isolated kafka:Producer? emailProducer = ();
+
+# Set the email callback function
 #
-# + callback - Callback function to send notifications
-public isolated function setNotificationCallback(NotificationCallback callback) {
+# + callback - field description
+public isolated function setEmailCallback(EmailCallback callback) {
     lock {
-        notificationCallback = callback;
+        emailCallback = callback;
     }
 }
 
-# Send notification using the callback
+# Send email using the callback
 #
-# + userId - User ID
-# + notification - Notification message
-# + return - Success or error
-isolated function sendNotification(string userId, NotificationMessage notification) returns error? {
+# + emailMessage - field description
+# + return - field description
+isolated function sendEmail(EmailNotificationMessage emailMessage) returns error? {
     lock {
-        NotificationCallback? callback = notificationCallback;
-        if callback is NotificationCallback {
-            return callback(userId, notification);
+        EmailCallback? callback = emailCallback;
+        if callback is EmailCallback {
+            return callback(emailMessage.clone());
         } else {
-            log:printWarn("No notification callback set");
-            return error("No notification callback set");
+            log:printWarn("No email callback set");
+            return error("No email callback set");
         }
     }
 }
 
-# Initialize Kafka consumers
+# Initialize Kafka listeners and producer
 #
-# + return - Success or error
-public isolated function initializeKafkaConsumers() returns error? {
+# + return - field description
+public isolated function initializeKafka() returns error? {
+    // Email events producer
+    kafka:ProducerConfiguration producerConfig = {
+        clientId: "email-producer",
+        acks: "all",
+        retryCount: 3
+    };
     lock {
-        // Initialize booking events consumer
-        bookingConsumer = check new kafka:Consumer(bootstrap_servers, consumerConfig);
-        check (<kafka:Consumer>bookingConsumer)->subscribe([booking_events]);
-        log:printInfo("📥 Booking events consumer initialized");
-
-        // Initialize waitlist events consumer  
-        waitlistConsumer = check new kafka:Consumer(bootstrap_servers, consumerConfig);
-        check (<kafka:Consumer>waitlistConsumer)->subscribe([waitlist_events]);
-        log:printInfo("📥 Waitlist events consumer initialized");
-
-        // Initialize conflict events consumer
-        conflictConsumer = check new kafka:Consumer(bootstrap_servers, consumerConfig);
-        check (<kafka:Consumer>conflictConsumer)->subscribe([conflict_events]);
-        log:printInfo("📥 Conflict events consumer initialized");
-
-        // Initialize notification events consumer
-        notificationConsumer = check new kafka:Consumer(bootstrap_servers, consumerConfig);
-        check (<kafka:Consumer>notificationConsumer)->subscribe([notification_events]);
-        log:printInfo("📥 Notification events consumer initialized");
-
-        // Initialize user events consumer
-        userConsumer = check new kafka:Consumer(bootstrap_servers, consumerConfig);
-        check (<kafka:Consumer>userConsumer)->subscribe([user_events]);
-        log:printInfo("📥 User events consumer initialized");
-
-        // Initialize resource events consumer
-        resourceConsumer = check new kafka:Consumer(bootstrap_servers, consumerConfig);
-        check (<kafka:Consumer>resourceConsumer)->subscribe([resource_events]);
-        log:printInfo("📥 Resource events consumer initialized");
+	    emailProducer = check new kafka:Producer(bootstrap_servers, producerConfig.clone());
     }
+    log:printInfo("📤 Email events producer initialized");
+    return ();
 }
 
-# Start consuming booking events
+# Publish email event
 #
-# + return - Success or error
-public isolated function startBookingEventConsumer() returns error? {
-    worker BookingEventWorker {
-        while true {
-            lock {
-                kafka:Consumer? consumer = bookingConsumer;
-                if consumer is kafka:Consumer {
-                    kafka:ConsumerRecord[]|error records = consumer->poll(1.0);
-                    if records is kafka:ConsumerRecord[] {
-                        foreach kafka:ConsumerRecord record in records {
-                            error? result = processBookingEvent(record);
-                            if result is error {
-                                log:printError("Error processing booking event", 'error = result);
-                            }
-                        }
-                    } else {
-                        log:printError("Error polling booking events", 'error = records);
-                    }
-                }
-            }
+# + emailId - field description
+# + status - field description
+# + recipient - field description
+# + return - field description
+public isolated function publishEmailEvent(string emailId, string status, string recipient) returns error? {
+    lock {
+        kafka:Producer? producer = emailProducer;
+        if producer is kafka:Producer {
+            EmailEvent emailEvent = {
+                eventId: uuid:createType1AsString(),
+                eventType: "email_status_update",
+                timestamp: time:utcNow().toString(),
+                eventData: {
+                    "emailId": emailId,
+                    "recipient": recipient,
+                    "status": status
+                },
+                metadata: {
+                    'service: "notification-service",
+                    'version: "1.0.0",
+                    environment: "dev"
+                },
+                emailId: emailId,
+                recipient: recipient,
+                templateType: SYSTEM_ANNOUNCEMENT,
+                priority: MEDIUM,
+                status: status
+            };
+            
+            check producer->send({
+                topic: email_events,
+                value: emailEvent.toJson()
+            });
+            
+            log:printInfo("📨 Published email event: " + emailId + " -> " + status);
+        } else {
+            return error("Email producer not initialized");
         }
     }
+    return ();
 }
 
-# Start consuming waitlist events
-#
-# + return - Success or error
-public isolated function startWaitlistEventConsumer() returns error? {
-    worker WaitlistEventWorker {
-        while true {
-            lock {
-                kafka:Consumer? consumer = waitlistConsumer;
-                if consumer is kafka:Consumer {
-                    kafka:ConsumerRecord[]|error records = consumer->poll(1.0);
-                    if records is kafka:ConsumerRecord[] {
-                        foreach kafka:ConsumerRecord record in records {
-                            error? result = processWaitlistEvent(record);
-                            if result is error {
-                                log:printError("Error processing waitlist event", 'error = result);
-                            }
-                        }
-                    } else {
-                        log:printError("Error polling waitlist events", 'error = records);
-                    }
-                }
+# Kafka service for booking events
+service /booking_events on bookingListener {
+    remote function onConsumerRecord(kafka:BytesConsumerRecord[] records) returns error? {
+        foreach kafka:BytesConsumerRecord r in records {
+            error? result = processBookingEvent(r);
+            if result is error {
+                log:printError("Error processing booking event", 'error = result);
             }
         }
+        return ();
     }
 }
 
-# Start consuming conflict events
-#
-# + return - Success or error
-public isolated function startConflictEventConsumer() returns error? {
-    worker ConflictEventWorker {
-        while true {
-            lock {
-                kafka:Consumer? consumer = conflictConsumer;
-                if consumer is kafka:Consumer {
-                    kafka:ConsumerRecord[]|error records = consumer->poll(1.0);
-                    if records is kafka:ConsumerRecord[] {
-                        foreach kafka:ConsumerRecord record in records {
-                            error? result = processConflictEvent(record);
-                            if result is error {
-                                log:printError("Error processing conflict event", 'error = result);
-                            }
-                        }
-                    } else {
-                        log:printError("Error polling conflict events", 'error = records);
-                    }
-                }
+# Kafka service for waitlist events
+service /waitlist_events on waitlistListener {
+    remote function onConsumerRecord(kafka:BytesConsumerRecord[] records) returns error? {
+        foreach kafka:BytesConsumerRecord r in records {
+            error? result = processWaitlistEvent(r);
+            if result is error {
+                log:printError("Error processing waitlist event", 'error = result);
             }
         }
+        return ();
     }
 }
 
-# Start consuming notification events
-#
-# + return - Success or error
-public isolated function startNotificationEventConsumer() returns error? {
-    worker NotificationEventWorker {
-        while true {
-            lock {
-                kafka:Consumer? consumer = notificationConsumer;
-                if consumer is kafka:Consumer {
-                    kafka:ConsumerRecord[]|error records = consumer->poll(1.0);
-                    if records is kafka:ConsumerRecord[] {
-                        foreach kafka:ConsumerRecord record in records {
-                            error? result = processNotificationEvent(record);
-                            if result is error {
-                                log:printError("Error processing notification event", 'error = result);
-                            }
-                        }
-                    } else {
-                        log:printError("Error polling notification events", 'error = records);
-                    }
-                }
+# Kafka service for user events
+service /user_events on userListener {
+    remote function onConsumerRecord(kafka:BytesConsumerRecord[] records) returns error? {
+        foreach kafka:BytesConsumerRecord r in records {
+            error? result = processUserEvent(r);
+            if result is error {
+                log:printError("Error processing user event", 'error = result);
             }
         }
+        return ();
     }
 }
 
-# Start consuming user events
-#
-# + return - Success or error
-public isolated function startUserEventConsumer() returns error? {
-    worker UserEventWorker {
-        while true {
-            lock {
-                kafka:Consumer? consumer = userConsumer;
-                if consumer is kafka:Consumer {
-                    kafka:ConsumerRecord[]|error records = consumer->poll(1.0);
-                    if records is kafka:ConsumerRecord[] {
-                        foreach kafka:ConsumerRecord record in records {
-                            error? result = processUserEvent(record);
-                            if result is error {
-                                log:printError("Error processing user event", 'error = result);
-                            }
-                        }
-                    } else {
-                        log:printError("Error polling user events", 'error = records);
-                    }
-                }
+# Kafka service for resource events
+service /resource_events on resourceListener {
+    remote function onConsumerRecord(kafka:BytesConsumerRecord[] records) returns error? {
+        foreach kafka:BytesConsumerRecord r in records {
+            error? result = processResourceEvent(r);
+            if result is error {
+                log:printError("Error processing resource event", 'error = result);
             }
         }
+        return ();
     }
 }
 
-# Start consuming resource events
+# Process booking event and trigger email notifications
 #
-# + return - Success or error
-public isolated function startResourceEventConsumer() returns error? {
-    worker ResourceEventWorker {
-        while true {
-            lock {
-                kafka:Consumer? consumer = resourceConsumer;
-                if consumer is kafka:Consumer {
-                    kafka:ConsumerRecord[]|error records = consumer->poll(1.0);
-                    if records is kafka:ConsumerRecord[] {
-                        foreach kafka:ConsumerRecord record in records {
-                            error? result = processResourceEvent(record);
-                            if result is error {
-                                log:printError("Error processing resource event", 'error = result);
-                            }
-                        }
-                    } else {
-                        log:printError("Error polling resource events", 'error = records);
-                    }
-                }
-            }
-        }
-    }
-}
-
-# Process booking event and trigger notifications
-#
-# + record - Kafka record containing booking event
-# + return - Success or error
-isolated function processBookingEvent(kafka:ConsumerRecord record) returns error? {
-    byte[] value = record.value;
+# + rec - field description
+# + return - field description
+function processBookingEvent(kafka:BytesConsumerRecord rec) returns error? {
+    byte[] value = rec.value;
     string eventJson = check string:fromBytes(value);
     json eventData = check eventJson.fromJsonString();
-    
     BookingEvent bookingEvent = check eventData.cloneWithType(BookingEvent);
     log:printInfo("🔔 Processing booking event: " + bookingEvent.eventType + " for booking: " + bookingEvent.bookingId);
-    
+    EmailNotificationMessage emailMessage;
     match bookingEvent.eventType {
         BOOKING_CREATED => {
-            NotificationMessage notification = createBookingCreatedNotification(bookingEvent);
-            check sendNotification(bookingEvent.userId, notification);
-            log:printInfo("✅ Sent booking created notification to user: " + bookingEvent.userId);
+            emailMessage = createBookingCreatedEmail(bookingEvent);
+            check sendEmail(emailMessage);
+            log:printInfo("✅ Sent booking created email to: " + bookingEvent.userEmail);
         }
         BOOKING_UPDATED => {
-            NotificationMessage notification = createBookingUpdatedNotification(bookingEvent);
-            check sendNotification(bookingEvent.userId, notification);
-            log:printInfo("✅ Sent booking updated notification to user: " + bookingEvent.userId);
+            emailMessage = createBookingUpdatedEmail(bookingEvent);
+            check sendEmail(emailMessage);
+            log:printInfo("✅ Sent booking updated email to: " + bookingEvent.userEmail);
         }
         BOOKING_CANCELLED => {
-            NotificationMessage notification = createBookingCancelledNotification(bookingEvent);
-            check sendNotification(bookingEvent.userId, notification);
-            log:printInfo("✅ Sent booking cancelled notification to user: " + bookingEvent.userId);
+            emailMessage = createBookingCancelledEmail(bookingEvent);
+            check sendEmail(emailMessage);
+            log:printInfo("✅ Sent booking cancelled email to: " + bookingEvent.userEmail);
         }
         BOOKING_CHECKED_IN => {
-            NotificationMessage notification = createBookingCheckedInNotification(bookingEvent);
-            check sendNotification(bookingEvent.userId, notification);
-            log:printInfo("✅ Sent check-in notification to user: " + bookingEvent.userId);
+            emailMessage = createBookingCheckedInEmail(bookingEvent);
+            check sendEmail(emailMessage);
+            log:printInfo("✅ Sent check-in email to: " + bookingEvent.userEmail);
         }
         BOOKING_CHECKED_OUT => {
-            NotificationMessage notification = createBookingCheckedOutNotification(bookingEvent);
-            check sendNotification(bookingEvent.userId, notification);
-            log:printInfo("✅ Sent check-out notification to user: " + bookingEvent.userId);
+            emailMessage = createBookingCheckedOutEmail(bookingEvent);
+            check sendEmail(emailMessage);
+            log:printInfo("✅ Sent check-out email to: " + bookingEvent.userEmail);
         }
         BOOKING_NO_SHOW => {
-            NotificationMessage notification = createBookingNoShowNotification(bookingEvent);
-            check sendNotification(bookingEvent.userId, notification);
-            log:printInfo("✅ Sent no-show notification to user: " + bookingEvent.userId);
+            emailMessage = createBookingNoShowEmail(bookingEvent);
+            check sendEmail(emailMessage);
+            log:printInfo("✅ Sent no-show email to: " + bookingEvent.userEmail);
         }
         _ => {
             log:printWarn("Unhandled booking event type: " + bookingEvent.eventType);
         }
     }
+    return ();
 }
 
-# Process waitlist event and trigger notifications
+# Process waitlist event and trigger email notifications
 #
-# + record - Kafka record containing waitlist event
-# + return - Success or error
-isolated function processWaitlistEvent(kafka:ConsumerRecord record) returns error? {
-    byte[] value = record.value;
+# + rec - field description
+# + return - field description
+function processWaitlistEvent(kafka:BytesConsumerRecord rec) returns error? {
+    byte[] value = rec.value;
     string eventJson = check string:fromBytes(value);
     json eventData = check eventJson.fromJsonString();
-    
     WaitlistEvent waitlistEvent = check eventData.cloneWithType(WaitlistEvent);
     log:printInfo("🔔 Processing waitlist event: " + waitlistEvent.eventType + " for waitlist: " + waitlistEvent.waitlistId);
-    
+    EmailNotificationMessage emailMessage;
     match waitlistEvent.eventType {
         WAITLIST_ADDED => {
-            NotificationMessage notification = createWaitlistAddedNotification(waitlistEvent);
-            check sendNotification(waitlistEvent.userId, notification);
-            log:printInfo("✅ Sent waitlist added notification to user: " + waitlistEvent.userId);
+            emailMessage = createWaitlistAddedEmail(waitlistEvent);
+            check sendEmail(emailMessage);
+            log:printInfo("✅ Sent waitlist added email to: " + waitlistEvent.userEmail);
         }
         WAITLIST_REMOVED => {
-            NotificationMessage notification = createWaitlistRemovedNotification(waitlistEvent);
-            check sendNotification(waitlistEvent.userId, notification);
-            log:printInfo("✅ Sent waitlist removed notification to user: " + waitlistEvent.userId);
+            emailMessage = createWaitlistRemovedEmail(waitlistEvent);
+            check sendEmail(emailMessage);
+            log:printInfo("✅ Sent waitlist removed email to: " + waitlistEvent.userEmail);
         }
         WAITLIST_PROMOTED => {
-            NotificationMessage notification = createWaitlistPromotedNotification(waitlistEvent);
-            check sendNotification(waitlistEvent.userId, notification);
-            log:printInfo("✅ Sent waitlist promoted notification to user: " + waitlistEvent.userId);
+            emailMessage = createWaitlistPromotedEmail(waitlistEvent);
+            check sendEmail(emailMessage);
+            log:printInfo("✅ Sent waitlist promoted email to: " + waitlistEvent.userEmail);
         }
         _ => {
             log:printWarn("Unhandled waitlist event type: " + waitlistEvent.eventType);
         }
     }
+    return ();
 }
 
-# Process conflict event and trigger notifications
+# Process user event and trigger email notifications
 #
-# + record - Kafka record containing conflict event
-# + return - Success or error
-isolated function processConflictEvent(kafka:ConsumerRecord record) returns error? {
-    byte[] value = record.value;
+# + rec - field description
+# + return - field description
+function processUserEvent(kafka:BytesConsumerRecord rec) returns error? {
+    byte[] value = rec.value;
     string eventJson = check string:fromBytes(value);
     json eventData = check eventJson.fromJsonString();
-    
-    ConflictEvent conflictEvent = check eventData.cloneWithType(ConflictEvent);
-    log:printInfo("🔔 Processing conflict event: " + conflictEvent.eventType + " for resource: " + conflictEvent.resourceId);
-    
-    match conflictEvent.eventType {
-        CONFLICT_DETECTED => {
-            check sendConflictDetectedNotification(conflictEvent);
-        }
-        CONFLICT_RESOLVED => {
-            check sendConflictResolvedNotification(conflictEvent);
-        }
-        _ => {
-            log:printWarn("Unhandled conflict event type: " + conflictEvent.eventType);
-        }
-    }
-}
-
-# Process notification event and send notifications
-#
-# + record - Kafka record containing notification event
-# + return - Success or error
-isolated function processNotificationEvent(kafka:ConsumerRecord record) returns error? {
-    byte[] value = record.value;
-    string eventJson = check string:fromBytes(value);
-    json eventData = check eventJson.fromJsonString();
-    
-    NotificationEvent notificationEvent = check eventData.cloneWithType(NotificationEvent);
-    log:printInfo("🔔 Processing notification event: " + notificationEvent.eventType + " for user: " + notificationEvent.userId);
-    
-    // Extract notification data and send via appropriate channels
-    json notificationData = notificationEvent.eventData;
-    check sendDirectNotification(notificationEvent.userId, notificationData);
-}
-
-# Process user event and trigger relevant notifications
-#
-# + record - Kafka record containing user event
-# + return - Success or error
-isolated function processUserEvent(kafka:ConsumerRecord record) returns error? {
-    byte[] value = record.value;
-    string eventJson = check string:fromBytes(value);
-    json eventData = check eventJson.fromJsonString();
-    
     UserEvent userEvent = check eventData.cloneWithType(UserEvent);
     log:printInfo("🔔 Processing user event: " + userEvent.eventType + " for user: " + userEvent.userId);
-    
+    EmailNotificationMessage emailMessage;
     match userEvent.eventType {
         USER_CREATED => {
-            NotificationMessage notification = createUserWelcomeNotification(userEvent);
-            check sendNotification(userEvent.userId, notification);
-            log:printInfo("✅ Sent welcome notification to user: " + userEvent.userId);
-        }
-        USER_UPDATED => {
-            NotificationMessage notification = createUserUpdatedNotification(userEvent);
-            check sendNotification(userEvent.userId, notification);
-            log:printInfo("✅ Sent profile updated notification to user: " + userEvent.userId);
+            emailMessage = createUserWelcomeEmail(userEvent);
+            check sendEmail(emailMessage);
+            log:printInfo("✅ Sent welcome email to: " + userEvent.userEmail);
         }
         _ => {
             log:printInfo("User event processed: " + userEvent.eventType);
         }
     }
+    return ();
 }
 
-# Process resource event and trigger relevant notifications
+# Process resource event and trigger email notifications
 #
-# + record - Kafka record containing resource event
-# + return - Success or error
-isolated function processResourceEvent(kafka:ConsumerRecord record) returns error? {
-    byte[] value = record.value;
+# + rec - field description
+# + return - field description
+function processResourceEvent(kafka:BytesConsumerRecord rec) returns error? {
+    byte[] value = rec.value;
     string eventJson = check string:fromBytes(value);
     json eventData = check eventJson.fromJsonString();
-    
     ResourceEvent resourceEvent = check eventData.cloneWithType(ResourceEvent);
     log:printInfo("🔔 Processing resource event: " + resourceEvent.eventType + " for resource: " + resourceEvent.resourceId);
-    
     match resourceEvent.eventType {
         RESOURCE_CREATED => {
-            check sendResourceCreatedNotification(resourceEvent);
+            check sendResourceAvailableEmail(resourceEvent);
         }
         RESOURCE_UPDATED => {
-            check sendResourceUpdatedNotification(resourceEvent);
-        }
-        RESOURCE_DELETED => {
-            check sendResourceDeletedNotification(resourceEvent);
+            check sendResourceMaintenanceEmail(resourceEvent);
         }
         _ => {
             log:printInfo("Resource event processed: " + resourceEvent.eventType);
         }
     }
+    return ();
 }
 
-# Send booking created notification
+# Create booking created email
 #
-# + event - Booking event
-# + return - Notification message to send
-public isolated function createBookingCreatedNotification(BookingEvent event) returns NotificationMessage {
+# + event - field description
+# + return - field description
+isolated function createBookingCreatedEmail(BookingEvent event) returns EmailNotificationMessage {
     return {
         notificationId: uuid:createType1AsString(),
-        userId: event.userId,
-        title: "Booking Confirmed",
-        message: "Your booking has been confirmed for " + event.resourceId,
-        'type: WEBSOCKET,
+        recipient: event.userEmail,
+        subject: "Booking Confirmed - " + event.resourceName,
+        body: "Your booking has been confirmed for " + event.resourceName,
+        templateType: BOOKING_CONFIRMATION,
         priority: MEDIUM,
-        targetChannel: (),
-        additionalData: (),
+        templateData: {
+            "resourceName": event.resourceName,
+            "startTime": event.startTime,
+            "endTime": event.endTime,
+            "bookingId": event.bookingId
+        },
         createdAt: time:utcNow(),
         scheduledAt: (),
-        isRead: false,
-        actionUrl: "/bookings/" + event.bookingId,
-        imageUrl: ()
+        bookingId: event.bookingId,
+        userId: event.userId,
+        resourceId: event.resourceId
     };
 }
 
-# Send booking updated notification
+# Create booking updated email
 #
-# + event - Booking event
-# + return - Notification message to send
-public isolated function createBookingUpdatedNotification(BookingEvent event) returns NotificationMessage {
+# + event - field description
+# + return - field description
+isolated function createBookingUpdatedEmail(BookingEvent event) returns EmailNotificationMessage {
     return {
         notificationId: uuid:createType1AsString(),
-        userId: event.userId,
-        title: "Booking Updated",
-        message: "Your booking has been updated for " + event.resourceId,
-        'type: WEBSOCKET,
+        recipient: event.userEmail,
+        subject: "Booking Updated - " + event.resourceName,
+        body: "Your booking has been updated for " + event.resourceName,
+        templateType: BOOKING_UPDATED_TEMPLATE,
         priority: MEDIUM,
-        targetChannel: (),
-        additionalData: (),
+        templateData: {
+            "resourceName": event.resourceName,
+            "startTime": event.startTime,
+            "endTime": event.endTime,
+            "bookingId": event.bookingId
+        },
         createdAt: time:utcNow(),
         scheduledAt: (),
-        isRead: false,
-        actionUrl: "/bookings/" + event.bookingId,
-        imageUrl: ()
+        bookingId: event.bookingId,
+        userId: event.userId,
+        resourceId: event.resourceId
     };
 }
 
-# Send booking cancelled notification
+# Create booking cancelled email
 #
-# + event - Booking event
-# + return - Notification message to send
-public isolated function createBookingCancelledNotification(BookingEvent event) returns NotificationMessage {
+# + event - field description
+# + return - field description
+isolated function createBookingCancelledEmail(BookingEvent event) returns EmailNotificationMessage {
     return {
         notificationId: uuid:createType1AsString(),
-        userId: event.userId,
-        title: "Booking Cancelled",
-        message: "Your booking has been cancelled for " + event.resourceId,
-        'type: WEBSOCKET,
+        recipient: event.userEmail,
+        subject: "Booking Cancelled - " + event.resourceName,
+        body: "Your booking has been cancelled for " + event.resourceName,
+        templateType: BOOKING_CANCELLED_TEMPLATE,
         priority: HIGH,
-        targetChannel: (),
-        additionalData: (),
+        templateData: {
+            "resourceName": event.resourceName,
+            "bookingId": event.bookingId
+        },
         createdAt: time:utcNow(),
         scheduledAt: (),
-        isRead: false,
-        actionUrl: "/bookings/" + event.bookingId,
-        imageUrl: ()
+        bookingId: event.bookingId,
+        userId: event.userId,
+        resourceId: event.resourceId
     };
 }
 
-# Send booking checked in notification
+# Create booking check-in email
 #
-# + event - Booking event
-# + return - Notification message to send
-public isolated function createBookingCheckedInNotification(BookingEvent event) returns NotificationMessage {
+# + event - field description
+# + return - field description
+isolated function createBookingCheckedInEmail(BookingEvent event) returns EmailNotificationMessage {
     return {
         notificationId: uuid:createType1AsString(),
-        userId: event.userId,
-        title: "Checked In",
-        message: "You have successfully checked in to " + event.resourceId,
-        'type: WEBSOCKET,
+        recipient: event.userEmail,
+        subject: "Checked In - " + event.resourceName,
+        body: "You have successfully checked in to " + event.resourceName,
+        templateType: CHECK_IN_REMINDER,
         priority: LOW,
-        targetChannel: (),
-        additionalData: (),
+        templateData: {
+            "resourceName": event.resourceName,
+            "bookingId": event.bookingId
+        },
         createdAt: time:utcNow(),
         scheduledAt: (),
-        isRead: false,
-        actionUrl: "/bookings/" + event.bookingId,
-        imageUrl: ()
+        bookingId: event.bookingId,
+        userId: event.userId,
+        resourceId: event.resourceId
     };
 }
 
-# Send booking checked out notification
+# Create booking check-out email
 #
-# + event - Booking event
-# + return - Notification message to send
-public isolated function createBookingCheckedOutNotification(BookingEvent event) returns NotificationMessage {
+# + event - field description
+# + return - field description
+isolated function createBookingCheckedOutEmail(BookingEvent event) returns EmailNotificationMessage {
     return {
         notificationId: uuid:createType1AsString(),
-        userId: event.userId,
-        title: "Checked Out",
-        message: "You have successfully checked out from " + event.resourceId,
-        'type: WEBSOCKET,
+        recipient: event.userEmail,
+        subject: "Checked Out - " + event.resourceName,
+        body: "You have successfully checked out from " + event.resourceName,
+        templateType: CHECK_IN_REMINDER,
         priority: LOW,
-        targetChannel: (),
-        additionalData: (),
+        templateData: {
+            "resourceName": event.resourceName,
+            "bookingId": event.bookingId
+        },
         createdAt: time:utcNow(),
         scheduledAt: (),
-        isRead: false,
-        actionUrl: "/bookings/" + event.bookingId,
-        imageUrl: ()
+        bookingId: event.bookingId,
+        userId: event.userId,
+        resourceId: event.resourceId
     };
 }
 
-# Send booking no-show notification
+# Create booking no-show email
 #
-# + event - Booking event
-# + return - Notification message to send
-public isolated function createBookingNoShowNotification(BookingEvent event) returns NotificationMessage {
+# + event - field description
+# + return - field description
+isolated function createBookingNoShowEmail(BookingEvent event) returns EmailNotificationMessage {
     return {
         notificationId: uuid:createType1AsString(),
-        userId: event.userId,
-        title: "Booking No-Show",
-        message: "You were marked as no-show for " + event.resourceId,
-        'type: WEBSOCKET,
+        recipient: event.userEmail,
+        subject: "Booking No-Show - " + event.resourceName,
+        body: "You were marked as no-show for " + event.resourceName,
+        templateType: BOOKING_REMINDER,
         priority: HIGH,
-        targetChannel: (),
-        additionalData: (),
+        templateData: {
+            "resourceName": event.resourceName,
+            "bookingId": event.bookingId
+        },
         createdAt: time:utcNow(),
         scheduledAt: (),
-        isRead: false,
-        actionUrl: "/bookings/" + event.bookingId,
-        imageUrl: ()
+        bookingId: event.bookingId,
+        userId: event.userId,
+        resourceId: event.resourceId
     };
 }
 
-# Send waitlist added notification
+# Create waitlist added email
 #
-# + event - Waitlist event
-# + return - Notification message to send
-public isolated function createWaitlistAddedNotification(WaitlistEvent event) returns NotificationMessage {
+# + event - field description
+# + return - field description
+isolated function createWaitlistAddedEmail(WaitlistEvent event) returns EmailNotificationMessage {
     return {
         notificationId: uuid:createType1AsString(),
-        userId: event.userId,
-        title: "Added to Waitlist",
-        message: "You have been added to the waitlist for " + event.resourceId,
-        'type: WEBSOCKET,
+        recipient: event.userEmail,
+        subject: "Added to Waitlist - " + event.resourceName,
+        body: "You have been added to the waitlist for " + event.resourceName,
+        templateType: WAITLIST_NOTIFICATION,
         priority: MEDIUM,
-        targetChannel: (),
-        additionalData: (),
+        templateData: {
+            "resourceName": event.resourceName,
+            "waitlistId": event.waitlistId
+        },
         createdAt: time:utcNow(),
         scheduledAt: (),
-        isRead: false,
-        actionUrl: "/waitlist/" + event.waitlistId,
-        imageUrl: ()
+        bookingId: (),
+        userId: event.userId,
+        resourceId: event.resourceId
     };
 }
 
-# Send waitlist removed notification
+# Create waitlist removed email
 #
-# + event - Waitlist event
-# + return - Notification message to send
-public isolated function createWaitlistRemovedNotification(WaitlistEvent event) returns NotificationMessage {
+# + event - field description
+# + return - field description
+isolated function createWaitlistRemovedEmail(WaitlistEvent event) returns EmailNotificationMessage {
     return {
         notificationId: uuid:createType1AsString(),
-        userId: event.userId,
-        title: "Removed from Waitlist",
-        message: "You have been removed from the waitlist for " + event.resourceId,
-        'type: WEBSOCKET,
+        recipient: event.userEmail,
+        subject: "Removed from Waitlist - " + event.resourceName,
+        body: "You have been removed from the waitlist for " + event.resourceName,
+        templateType: WAITLIST_NOTIFICATION,
         priority: MEDIUM,
-        targetChannel: (),
-        additionalData: (),
+        templateData: {
+            "resourceName": event.resourceName,
+            "waitlistId": event.waitlistId
+        },
         createdAt: time:utcNow(),
         scheduledAt: (),
-        isRead: false,
-        actionUrl: (),
-        imageUrl: ()
+        bookingId: (),
+        userId: event.userId,
+        resourceId: event.resourceId
     };
 }
 
-# Send waitlist promoted notification
+# Create waitlist promoted email
 #
-# + event - Waitlist event
-# + return - Notification message to send
-public isolated function createWaitlistPromotedNotification(WaitlistEvent event) returns NotificationMessage {
+# + event - field description
+# + return - field description
+isolated function createWaitlistPromotedEmail(WaitlistEvent event) returns EmailNotificationMessage {
     return {
         notificationId: uuid:createType1AsString(),
-        userId: event.userId,
-        title: "Booking Available!",
-        message: "Great news! A spot opened up for " + event.resourceId + ". Please confirm your booking.",
-        'type: WEBSOCKET,
+        recipient: event.userEmail,
+        subject: "Booking Available! - " + event.resourceName,
+        body: "Great news! A spot opened up for " + event.resourceName + ". Please confirm your booking.",
+        templateType: WAITLIST_NOTIFICATION,
         priority: URGENT,
-        targetChannel: (),
-        additionalData: (),
+        templateData: {
+            "resourceName": event.resourceName,
+            "waitlistId": event.waitlistId
+        },
         createdAt: time:utcNow(),
         scheduledAt: (),
-        isRead: false,
-        actionUrl: "/waitlist/" + event.waitlistId + "/confirm",
-        imageUrl: ()
+        bookingId: (),
+        userId: event.userId,
+        resourceId: event.resourceId
     };
 }
 
-# Send conflict detected notification
+# Create user welcome email
 #
-# + event - Conflict event
-# + return - Success or error
-isolated function sendConflictDetectedNotification(ConflictEvent event) returns error? {
-    // This would typically notify administrators or affected users
-    log:printInfo("⚠️ Conflict detected for resource: " + event.resourceId);
-    // Implementation would depend on who needs to be notified
-}
-
-# Send conflict resolved notification
-#
-# + event - Conflict event
-# + return - Success or error
-isolated function sendConflictResolvedNotification(ConflictEvent event) returns error? {
-    // This would typically notify administrators or affected users
-    log:printInfo("✅ Conflict resolved for resource: " + event.resourceId);
-    // Implementation would depend on who needs to be notified
-}
-
-# Send user welcome notification
-#
-# + event - User event
-# + return - Notification message to send
-public isolated function createUserWelcomeNotification(UserEvent event) returns NotificationMessage {
+# + event - field description
+# + return - field description
+isolated function createUserWelcomeEmail(UserEvent event) returns EmailNotificationMessage {
     return {
         notificationId: uuid:createType1AsString(),
-        userId: event.userId,
-        title: "Welcome to Campus Resources!",
-        message: "Your account has been created successfully. Explore and book campus resources.",
-        'type: WEBSOCKET,
+        recipient: event.userEmail,
+        subject: "Welcome to Campus Resource Management",
+        body: "Welcome to our campus resource management system!",
+        templateType: USER_WELCOME,
         priority: MEDIUM,
-        targetChannel: (),
-        additionalData: (),
+        templateData: {
+            "userName": event.userName,
+            "userId": event.userId
+        },
         createdAt: time:utcNow(),
         scheduledAt: (),
-        isRead: false,
-        actionUrl: "/dashboard",
-        imageUrl: ()
-    };
-}
-
-# Send user updated notification
-#
-# + event - User event
-# + return - Notification message to send
-public isolated function createUserUpdatedNotification(UserEvent event) returns NotificationMessage {
-    return {
-        notificationId: uuid:createType1AsString(),
+        bookingId: (),
         userId: event.userId,
-        title: "Profile Updated",
-        message: "Your profile has been updated successfully.",
-        'type: WEBSOCKET,
-        priority: LOW,
-        targetChannel: (),
-        additionalData: (),
-        createdAt: time:utcNow(),
-        scheduledAt: (),
-        isRead: false,
-        actionUrl: "/profile",
-        imageUrl: ()
+        resourceId: ()
     };
 }
 
-# Send resource created notification (for admins)
+# Send resource maintenance email
 #
-# + event - Resource event
-# + return - Success or error
-isolated function sendResourceCreatedNotification(ResourceEvent event) returns error? {
-    // Typically notify admins or interested users
-    log:printInfo("📋 Resource created: " + event.resourceId);
+# + event - The resource event containing details about the maintenance
+# + return - An error if the email sending fails
+isolated function sendResourceMaintenanceEmail(ResourceEvent event) returns error? {
+    EmailNotificationMessage emailMessage = {
+        notificationId: uuid:createType1AsString(),
+        recipient: "admin@university.edu", // Default admin email since ResourceEvent doesn't have notifyEmail
+        subject: "Maintenance Scheduled - " + event.resourceName,
+        body: "Maintenance has been scheduled for " + event.resourceName,
+        templateType: MAINTENANCE_ALERT,
+        priority: HIGH,
+        templateData: {
+            "resourceName": event.resourceName,
+            "resourceId": event.resourceId
+        },
+        createdAt: time:utcNow(),
+        scheduledAt: (),
+        bookingId: (),
+        userId: (),
+        resourceId: event.resourceId
+    };
+    
+    check sendEmail(emailMessage);
+    log:printInfo("✅ Sent maintenance email");
+    return ();
 }
 
-# Send resource updated notification
+# Send resource available email
 #
-# + event - Resource event
-# + return - Success or error
-isolated function sendResourceUpdatedNotification(ResourceEvent event) returns error? {
-    // Notify users who have bookings or are on waitlist
-    log:printInfo("📋 Resource updated: " + event.resourceId);
-}
-
-# Send resource deleted notification
-#
-# + event - Resource event
-# + return - Success or error
-isolated function sendResourceDeletedNotification(ResourceEvent event) returns error? {
-    // Notify users with affected bookings
-    log:printInfo("📋 Resource deleted: " + event.resourceId);
-}
-
-# Send direct notification
-#
-# + userId - User ID
-# + notificationData - Notification data
-# + return - Success or error
-isolated function sendDirectNotification(string userId, json notificationData) returns error? {
-    // Parse notification data and send via appropriate channel
-    log:printInfo("📤 Sending direct notification to user: " + userId);
-    // Implementation depends on the notification data structure
-}
-
-# Close all Kafka consumers
-#
-# + return - Success or error
-public isolated function closeKafkaConsumers() returns error? {
-    lock {
-        if bookingConsumer is kafka:Consumer {
-            check (<kafka:Consumer>bookingConsumer)->close();
-            log:printInfo("Booking consumer closed");
-        }
-        if waitlistConsumer is kafka:Consumer {
-            check (<kafka:Consumer>waitlistConsumer)->close();
-            log:printInfo("Waitlist consumer closed");
-        }
-        if conflictConsumer is kafka:Consumer {
-            check (<kafka:Consumer>conflictConsumer)->close();
-            log:printInfo("Conflict consumer closed");
-        }
-        if notificationConsumer is kafka:Consumer {
-            check (<kafka:Consumer>notificationConsumer)->close();
-            log:printInfo("Notification consumer closed");
-        }
-        if userConsumer is kafka:Consumer {
-            check (<kafka:Consumer>userConsumer)->close();
-            log:printInfo("User consumer closed");
-        }
-        if resourceConsumer is kafka:Consumer {
-            check (<kafka:Consumer>resourceConsumer)->close();
-            log:printInfo("Resource consumer closed");
-        }
-    }
+# + event - The resource event containing details about the availability
+# + return - An error if the email sending fails
+isolated function sendResourceAvailableEmail(ResourceEvent event) returns error? {
+    EmailNotificationMessage emailMessage = {
+        notificationId: uuid:createType1AsString(),
+        recipient: "admin@university.edu", // Default admin email since ResourceEvent doesn't have notifyEmail
+        subject: "Resource Available - " + event.resourceName,
+        body: event.resourceName + " is now available for booking.",
+        templateType: SYSTEM_ANNOUNCEMENT,
+        priority: MEDIUM,
+        templateData: {
+            "resourceName": event.resourceName,
+            "resourceId": event.resourceId
+        },
+        createdAt: time:utcNow(),
+        scheduledAt: (),
+        bookingId: (),
+        userId: (),
+        resourceId: event.resourceId
+    };
+    
+    check sendEmail(emailMessage);
+    log:printInfo("✅ Sent resource available email");
+    return ();
 }

@@ -30,8 +30,8 @@ The Smart Campus Resource Management Platform follows a microservices architectu
 │ User Service│ │Resource Svc │ │Booking Svc  │ │AI Service   │ │Notification │
 │ (Port 9092) │ │(Port 9093)  │ │(Port 9094)  │ │(Port 9096)  │ │Svc(Port 9091│
 │             │ │             │ │             │ │             │ │             │
-│- Campus     │ │- Resource   │ │- Smart      │ │- Pinecone   │ │- Email/SMS  │
-│  Registration│ │  Management │ │  Booking    │ │  AI Recs    │ │- WebSocket  │
+│- Campus     │ │- Resource   │ │- Smart      │ │- Pinecone   │ │- Email      │
+│  Registration│ │  Management │ │  Booking    │ │  AI Recs    │ │- Templates  │
 │- Profile    │ │- Availability│ │- Conflict   │ │- Usage      │ │- Kafka      │
 │- JWT Tokens │ │- Features   │ │  Detection  │ │  Patterns   │ │  Consumer   │
 │- Department │ │- Maintenance│ │- Waitlist   │ │- Predictions│ │- Campus     │
@@ -230,7 +230,7 @@ CREATE TABLE bookings (
 
 ### 6. Notification Service (Port 9091)
 
-**Role**: Multi-channel notification delivery for campus events
+**Role**: Email notification delivery for campus events
 
 **Current Implementation**:
 ```ballerina
@@ -238,6 +238,11 @@ service on new http:Listener(9091) {
     resource function post sendVerificationEmail(email:VerificationEmailRequest req) 
         returns VerificationEmailResponse | InternalServerErrorResponse {
         // Email sending logic
+    }
+    
+    resource function post sendBookingConfirmation(email:BookingEmailRequest req) 
+        returns EmailResponse | InternalServerErrorResponse {
+        // Booking confirmation email logic
     }
 }
 ```
@@ -248,7 +253,7 @@ CREATE TABLE notifications (
     id VARCHAR(100) PRIMARY KEY,
     user_id VARCHAR(100),
     type ENUM('booking_confirmation', 'booking_reminder', 'booking_cancelled', 'maintenance_alert', 'system_announcement'),
-    channel ENUM('email', 'websocket', 'push'),
+    channel ENUM('email'),
     title VARCHAR(255),
     message TEXT,
     status ENUM('pending', 'sent', 'delivered', 'failed'),
@@ -262,11 +267,12 @@ CREATE TABLE notifications (
 ```
 
 **Key Features**:
-- **Campus Email Notifications**: Booking confirmations and reminders
-- **WebSocket Real-time Updates**: Live booking status for campus users
-- **Kafka Event Consumer**: Campus event processing and notification triggers
-- **Campus Notification Preferences**: Student/staff notification management
-- **Admin Alert System**: System-wide notifications for campus administrators
+- **Campus Email Notifications**: Booking confirmations, reminders, and alerts
+- **Email Templates**: Professional HTML email templates for different notification types
+- **Kafka Event Consumer**: Campus event processing and email notification triggers
+- **Campus Email Preferences**: Student/staff email notification management
+- **Admin Email System**: System-wide email notifications for campus administrators
+- **Email Delivery Tracking**: Monitor email delivery status and handle failures
 
 ### Security Architecture
 

@@ -1,6 +1,6 @@
 import ballerina/time;
 
-# Event types
+# Event types for campus resource management
 public enum EventType {
     BOOKING_CREATED = "booking.created",
     BOOKING_UPDATED = "booking.updated", 
@@ -14,32 +14,43 @@ public enum EventType {
     CONFLICT_DETECTED = "conflict.detected",
     CONFLICT_RESOLVED = "conflict.resolved",
     USER_CREATED = "user.created",
-    USER_UPDATED = "user.updated",
-    USER_DELETED = "user.deleted",
     RESOURCE_CREATED = "resource.created",
     RESOURCE_UPDATED = "resource.updated",
     RESOURCE_DELETED = "resource.deleted",
-    NOTIFICATION_SEND = "notification.send"
+    EMAIL_SEND = "email.send",
+    EMAIL_SENT = "email.sent",
+    EMAIL_FAILED = "email.failed"
 }
 
-# Notification types
-public enum NotificationType {
-    EMAIL = "email",
-    SMS = "sms",
-    PUSH = "push",
-    WEBSOCKET = "websocket",
-    IN_APP = "in_app"
+# Email template types for notifications
+public enum NotificationTemplateType {
+    BOOKING_CONFIRMATION = "booking_confirmation",
+    BOOKING_REMINDER = "booking_reminder",
+    BOOKING_CANCELLED_TEMPLATE = "booking_cancelled",
+    BOOKING_UPDATED_TEMPLATE = "booking_updated",
+    WAITLIST_NOTIFICATION = "waitlist_notification",
+    CHECK_IN_REMINDER = "check_in_reminder",
+    MAINTENANCE_ALERT = "maintenance_alert",
+    SYSTEM_ANNOUNCEMENT = "system_announcement",
+    USER_WELCOME = "user_welcome",
+    PASSWORD_RESET = "password_reset"
 }
 
-# Notification priority levels
-public enum NotificationPriority {
+# Email priority levels
+public enum EmailPriority {
     LOW = "low",
     MEDIUM = "medium",
     HIGH = "high",
     URGENT = "urgent"
 }
-
-# Base event structure from Kafka
+    
+# Description.
+#
+# + eventId - field description  
+# + eventType - field description  
+# + timestamp - field description  
+# + eventData - field description  
+# + metadata - field description
 public type BaseEvent record {|
     string eventId;
     string eventType;
@@ -48,110 +59,156 @@ public type BaseEvent record {|
     EventMetadata metadata;
 |};
 
-# Event metadata
+
+# Description.
+#
+# + 'service - field description  
+# + 'version - field description  
+# + environment - field description
 public type EventMetadata record {|
     string 'service;
     string 'version;
     string environment;
 |};
 
-# Booking event structure
+
+# Description.
+#
+# + bookingId - field description  
+# + userId - field description  
+# + resourceId - field description  
+# + userEmail - field description  
+# + userName - field description  
+# + resourceName - field description  
+# + startTime - field description  
+# + endTime - field description  
+# + location - field description
 public type BookingEvent record {|
     *BaseEvent;
     string bookingId;
     string userId;
     string resourceId;
+    string userEmail;
+    string userName;
+    string resourceName;
+    string startTime;
+    string endTime;
+    string location;
 |};
 
-# Waitlist event structure
+
+# Description.
+#
+# + waitlistId - field description  
+# + userId - field description  
+# + resourceId - field description  
+# + userEmail - field description  
+# + userName - field description  
+# + resourceName - field description  
+# + position - field description
 public type WaitlistEvent record {|
     *BaseEvent;
     string waitlistId;
     string userId;
     string resourceId;
+    string userEmail;
+    string userName;
+    string resourceName;
+    int position;
 |};
 
-# Conflict event structure
-public type ConflictEvent record {|
-    *BaseEvent;
-    string resourceId;
-|};
 
-# User event structure
+# Description.
+#
+# + userId - field description  
+# + userEmail - field description  
+# + userName - field description  
+# + role - field description  
+# + department - field description
 public type UserEvent record {|
     *BaseEvent;
     string userId;
+    string userEmail;
+    string userName;
+    string role;
+    string department;
 |};
 
-# Resource event structure
+
+# Description.
+#
+# + resourceId - field description  
+# + resourceName - field description  
+# + resourceType - field description  
+# + location - field description  
+# + status - field description
 public type ResourceEvent record {|
     *BaseEvent;
     string resourceId;
+    string resourceName;
+    string resourceType;
+    string location;
+    string status;
 |};
 
-# Notification event structure
-public type NotificationEvent record {|
+
+# Description.
+#
+# + emailId - field description  
+# + recipient - field description  
+# + templateType - field description  
+# + priority - field description  
+# + status - field description
+public type EmailEvent record {|
     *BaseEvent;
-    string userId;
+    string emailId;
+    string recipient;
+    NotificationTemplateType templateType;
+    EmailPriority priority;
+    string status;
 |};
 
-# Notification message structure
-public type NotificationMessage record {|
+
+# Description.
+#
+# + notificationId - field description  
+# + recipient - field description  
+# + subject - field description  
+# + body - field description  
+# + templateType - field description  
+# + priority - field description  
+# + templateData - field description  
+# + createdAt - field description  
+# + scheduledAt - field description  
+# + bookingId - field description  
+# + userId - field description  
+# + resourceId - field description
+public type EmailNotificationMessage record {|
     string notificationId;
-    string userId;
-    string title;
-    string message;
-    NotificationType 'type;
-    NotificationPriority priority;
-    string? targetChannel;
-    json? additionalData;
-    time:Utc createdAt;
-    time:Utc? scheduledAt;
-    boolean isRead;
-    string? actionUrl;
-    string? imageUrl;
-|};
-
-# Email notification data
-public type EmailNotificationData record {|
-    string to;
+    string recipient;
     string subject;
     string body;
-    string? cc;
-    string? bcc;
-    string? replyTo;
-    boolean isHtml?;
-    string? templateId;
+    NotificationTemplateType templateType;
+    EmailPriority priority;
     json? templateData;
+    time:Utc createdAt;
+    time:Utc? scheduledAt;
+    string? bookingId;
+    string? userId;
+    string? resourceId;
 |};
 
-# SMS notification data
-public type SmsNotificationData record {|
-    string to;
-    string message;
-    string? 'from;
-|};
 
-# Push notification data
-public type PushNotificationData record {|
-    string[] deviceTokens;
-    string title;
-    string body;
-    string? icon;
-    string? sound;
-    json? data;
-    string? clickAction;
-|};
-
-# WebSocket notification data
-public type WebSocketNotificationData record {|
-    string[] userIds;
-    string 'type;
-    json payload;
-    boolean broadcast?;
-|};
-
-# Consumer configuration
+# Description.
+#
+# + bootstrapServers - field description  
+# + clientId - field description  
+# + groupId - field description  
+# + autoOffsetReset - field description  
+# + enableAutoCommit - field description  
+# + autoCommitIntervalMs - field description  
+# + sessionTimeoutMs - field description  
+# + heartbeatIntervalMs - field description
 public type KafkaConsumerConfig record {|
     string[] bootstrapServers;
     string clientId;
@@ -163,39 +220,46 @@ public type KafkaConsumerConfig record {|
     int heartbeatIntervalMs;
 |};
 
-# Topic configuration
+
+# Description.
+#
+# + bookingEvents - field description  
+# + waitlistEvents - field description  
+# + userEvents - field description  
+# + resourceEvents - field description  
+# + emailEvents - field description
 public type TopicConfig record {|
     string bookingEvents;
     string waitlistEvents;
-    string conflictEvents;
-    string notificationEvents;
     string userEvents;
     string resourceEvents;
+    string emailEvents;
 |};
 
-# Notification template
-public type NotificationTemplate record {|
-    string templateId;
-    string name;
-    NotificationType 'type;
-    string subject?;
-    string bodyTemplate;
-    json? defaultData;
-    boolean isActive;
-|};
 
-# Notification delivery status
-public type NotificationDeliveryStatus record {|
-    string notificationId;
-    string userId;
-    NotificationType 'type;
-    string status; // sent, delivered, failed, pending
+# Description.
+#
+# + emailId - field description  
+# + recipient - field description  
+# + status - field description  
+# + errorMessage - field description  
+# + timestamp - field description  
+# + retryCount - field description
+public type EmailDeliveryStatus record {|
+    string emailId;
+    string recipient;
+    string status;
     string? errorMessage;
     time:Utc timestamp;
     int retryCount;
 |};
 
-# Consumer group offset tracking
+# Kafka consumer group offset tracking
+#
+# + topic - field description  
+# + partition - field description  
+# + offset - field description  
+# + lastCommitted - field description
 public type ConsumerOffset record {|
     string topic;
     int partition;

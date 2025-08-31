@@ -75,7 +75,7 @@ dependencies = [
 [[package]]
 org = "ballerina"
 name = "http"
-version = "2.12.9"
+version = "2.11.0"
 dependencies = [
 	{org = "ballerina", name = "auth"},
 	{org = "ballerina", name = "cache"},
@@ -264,6 +264,18 @@ dependencies = [
 
 [[package]]
 org = "ballerina"
+name = "regex"
+version = "1.4.3"
+dependencies = [
+	{org = "ballerina", name = "jballerina.java"},
+	{org = "ballerina", name = "lang.string"}
+]
+modules = [
+	{org = "ballerina", packageName = "regex", moduleName = "regex"}
+]
+
+[[package]]
+org = "ballerina"
 name = "task"
 version = "2.5.0"
 dependencies = [
@@ -274,9 +286,12 @@ dependencies = [
 [[package]]
 org = "ballerina"
 name = "time"
-version = "2.5.0"
+version = "2.4.0"
 dependencies = [
 	{org = "ballerina", name = "jballerina.java"}
+]
+modules = [
+	{org = "ballerina", packageName = "time", moduleName = "time"}
 ]
 
 [[package]]
@@ -285,6 +300,20 @@ name = "url"
 version = "2.4.0"
 dependencies = [
 	{org = "ballerina", name = "jballerina.java"}
+]
+
+[[package]]
+org = "ballerina"
+name = "uuid"
+version = "1.7.0"
+dependencies = [
+	{org = "ballerina", name = "crypto"},
+	{org = "ballerina", name = "jballerina.java"},
+	{org = "ballerina", name = "lang.int"},
+	{org = "ballerina", name = "time"}
+]
+modules = [
+	{org = "ballerina", packageName = "uuid", moduleName = "uuid"}
 ]
 
 [[package]]
@@ -300,6 +329,21 @@ modules = [
 ]
 
 [[package]]
+org = "ballerinax"
+name = "kafka"
+version = "3.7.0"
+dependencies = [
+	{org = "ballerina", name = "crypto"},
+	{org = "ballerina", name = "jballerina.java"},
+	{org = "ballerina", name = "lang.string"},
+	{org = "ballerina", name = "uuid"},
+	{org = "ballerinai", name = "observe"}
+]
+modules = [
+	{org = "ballerinax", packageName = "kafka", moduleName = "kafka"}
+]
+
+[[package]]
 org = "kaush"
 name = "notification_service"
 version = "0.1.0"
@@ -307,9 +351,15 @@ dependencies = [
 	{org = "ballerina", name = "email"},
 	{org = "ballerina", name = "http"},
 	{org = "ballerina", name = "log"},
-	{org = "ballerinai", name = "observe"}
+	{org = "ballerina", name = "regex"},
+	{org = "ballerina", name = "time"},
+	{org = "ballerina", name = "uuid"},
+	{org = "ballerinai", name = "observe"},
+	{org = "ballerinax", name = "kafka"}
 ]
 modules = [
-	{org = "kaush", packageName = "notification_service", moduleName = "notification_service"}
+	{org = "kaush", packageName = "notification_service", moduleName = "notification_service"},
+	{org = "kaush", packageName = "notification_service", moduleName = "notification_service.email"},
+	{org = "kaush", packageName = "notification_service", moduleName = "notification_service.kafka"}
 ]
 

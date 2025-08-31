@@ -1,187 +1,449 @@
+import notification_service.email;
+
 import ballerina/log;
-import ballerina/uuid;
 import ballerina/time;
-import notification_service.kafka as kafka;
-import notification_service.websocket as ws;
+import ballerina/regex;
 
-# Bridge function to send notification from Kafka module to WebSocket module
-#
-# + userId - Target user ID
-# + notification - Notification message from Kafka module
-# + return - Success or error
-public isolated function sendNotificationToUser(string userId, kafka:NotificationMessage notification) returns error? {
-    // Convert Kafka notification to WebSocket notification payload
-    ws:WebSocketNotificationPayload payload = {
-        notificationId: notification.notificationId,
-        title: notification.title,
-        message: notification.message,
-        priority: notification.priority,
-        actionUrl: notification.actionUrl,
-        imageUrl: notification.imageUrl,
-        additionalData: notification.additionalData,
-        createdAt: notification.createdAt
-    };
-    
-    // Create WebSocket message
-    ws:WebSocketMessage wsMessage = {
-        messageId: uuid:createType1AsString(),
-        'type: ws:NOTIFICATION,
-        payload: payload,
-        timestamp: time:utcNow(),
-        targetUserId: userId
-    };
-    
-    // Send via WebSocket
-    return ws:sendNotificationToUser(userId, wsMessage);
-}
+# Email notification service utility functions
 
-# Bridge function to broadcast system messages
-#
-# + title - Message title
-# + message - Message content
-# + priority - Message priority
-# + return - Success or error
-public isolated function broadcastSystemMessage(string title, string message, string priority) returns error? {
-    ws:WebSocketMessage broadcastMessage = {
-        messageId: uuid:createType1AsString(),
-        'type: ws:NOTIFICATION,
-        payload: {
-            notificationId: uuid:createType1AsString(),
-            title: title,
-            message: message,
-            priority: priority,
-            createdAt: time:utcNow()
-        },
-        timestamp: time:utcNow(),
-        broadcast: true
-    };
-    
-    return ws:broadcastMessage(broadcastMessage);
-}
-
-# Convert priority string to Kafka notification priority enum
-#
-# + priority - Priority string
-# + return - Notification priority enum
-public isolated function convertPriority(string? priority) returns kafka:NotificationPriority {
-    if priority is () {
-        return kafka:MEDIUM;
+# Validate email address format
+# 
+# + emailAddress - Email address to validate
+# + return - True if valid, false otherwise
+public function isValidEmail(string emailAddress) returns boolean {
+    // Basic email validation - contains @ and has characters before and after
+    if !emailAddress.includes("@") {
+        return false;
     }
     
-    match priority.toLowerAscii() {
-        "low" => {
-            return kafka:LOW;
+    string[] parts = regex:split(emailAddress, "@");
+    if parts.length() != 2 {
+        return false;
+    }
+    
+    string localPart = parts[0];
+    string domainPart = parts[1];
+    
+    // Check local part is not empty and domain part contains a dot
+    return localPart.length() > 0 && domainPart.includes(".") && domainPart.length() > 3;
+}
+
+# Parse priority string to EmailPriority enum
+# 
+# + priorityStr - Priority string ("HIGH", "MEDIUM", "LOW")
+# + return - EmailPriority enum value
+public function parseEmailPriority(string priorityStr) returns email:EmailPriority {
+    match priorityStr.toUpperAscii() {
+        "HIGH" => {
+            return email:HIGH;
         }
-        "medium" => {
-            return kafka:MEDIUM;
-        }
-        "high" => {
-            return kafka:HIGH;
-        }
-        "urgent" => {
-            return kafka:URGENT;
+        "LOW" => {
+            return email:LOW;
         }
         _ => {
-            return kafka:MEDIUM;
+            return email:MEDIUM;
         }
     }
 }
 
-# Create notification message for Kafka processing
-#
-# + notificationId - Notification ID
-# + userId - User ID
-# + title - Notification title
-# + message - Notification message
-# + priority - Notification priority
-# + additionalData - Additional data
-# + actionUrl - Action URL
-# + imageUrl - Image URL
-# + scheduledAt - Scheduled time
-# + return - Notification message
-public isolated function createNotificationMessage(
-    string notificationId,
-    string userId,
-    string title,
-    string message,
-    kafka:NotificationPriority priority,
-    json? additionalData,
-    string? actionUrl,
-    string? imageUrl,
-    time:Utc? scheduledAt
-) returns kafka:NotificationMessage {
-    return {
-        notificationId: notificationId,
-        userId: userId,
-        title: title,
-        message: message,
-        'type: kafka:WEBSOCKET,
-        priority: priority,
-        targetChannel: (),
-        additionalData: additionalData,
-        createdAt: time:utcNow(),
-        scheduledAt: scheduledAt,
-        isRead: false,
-        actionUrl: actionUrl,
-        imageUrl: imageUrl
-    };
+# Format email template with data
+# 
+# + templateType - Type of email template
+# + templateData - Data to populate in template
+# + return - Formatted HTML content
+public function formatEmailTemplate(string templateType, map<anydata> templateData) returns string {
+    match templateType {
+        "booking_confirmation" => {
+            return formatBookingConfirmationTemplate(templateData);
+        }
+        "booking_cancellation" => {
+            return formatBookingCancellationTemplate(templateData);
+        }
+        "waitlist_notification" => {
+            return formatWaitlistNotificationTemplate(templateData);
+        }
+        "resource_reminder" => {
+            return formatResourceReminderTemplate(templateData);
+        }
+        "account_welcome" => {
+            return formatAccountWelcomeTemplate(templateData);
+        }
+        "password_reset" => {
+            return formatPasswordResetTemplate(templateData);
+        }
+        _ => {
+            return formatGenericTemplate(templateData);
+        }
+    }
 }
 
-# Get WebSocket connection statistics
-#
-# + return - Connection statistics
-public isolated function getWebSocketStats() returns ws:ConnectionStats {
-    return ws:getConnectionStats();
+# Format booking confirmation email template
+# 
+# + data - Template data
+# + return - HTML email content
+function formatBookingConfirmationTemplate(map<anydata> data) returns string {
+    string userName = data.get("userName").toString();
+    string resourceName = data.get("resourceName").toString();
+    string bookingDate = data.get("bookingDate").toString();
+    string bookingTime = data.get("bookingTime").toString();
+    string location = data.get("location").toString();
+    string bookingId = data.get("bookingId").toString();
+
+    return string `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4; }
+            .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; }
+            .header { text-align: center; color: #2e7d32; margin-bottom: 30px; }
+            .booking-details { background: #e8f5e8; padding: 20px; border-radius: 8px; margin: 20px 0; }
+            .footer { text-align: center; color: #666; margin-top: 30px; font-size: 12px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🎉 Booking Confirmed!</h1>
+            </div>
+            
+            <p>Dear ${userName},</p>
+            
+            <p>Your booking has been confirmed! Here are the details:</p>
+            
+            <div class="booking-details">
+                <h3>📋 Booking Details</h3>
+                <p><strong>Resource:</strong> ${resourceName}</p>
+                <p><strong>Date:</strong> ${bookingDate}</p>
+                <p><strong>Time:</strong> ${bookingTime}</p>
+                <p><strong>Location:</strong> ${location}</p>
+                <p><strong>Booking ID:</strong> ${bookingId}</p>
+            </div>
+            
+            <p>Please arrive on time and bring any necessary items. If you need to cancel or modify your booking, please contact us at least 24 hours in advance.</p>
+            
+            <p>Thank you for using our campus resource management system!</p>
+            
+            <div class="footer">
+                <p>Campus Resource Management System<br>
+                University Email: campus@university.edu</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
 }
 
-# Get active WebSocket connections count
-#
-# + return - Number of active connections
-public isolated function getActiveConnectionsCount() returns int {
-    return ws:getActiveConnectionsCount();
+# Format booking cancellation email template
+# 
+# + data - Template data
+# + return - HTML email content
+function formatBookingCancellationTemplate(map<anydata> data) returns string {
+    string userName = data.get("userName").toString();
+    string resourceName = data.get("resourceName").toString();
+    string bookingDate = data.get("bookingDate").toString();
+    string bookingId = data.get("bookingId").toString();
+
+    return string `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4; }
+            .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; }
+            .header { text-align: center; color: #d32f2f; margin-bottom: 30px; }
+            .booking-details { background: #ffeee; padding: 20px; border-radius: 8px; margin: 20px 0; }
+            .footer { text-align: center; color: #666; margin-top: 30px; font-size: 12px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>❌ Booking Cancelled</h1>
+            </div>
+            
+            <p>Dear ${userName},</p>
+            
+            <p>Your booking has been cancelled as requested:</p>
+            
+            <div class="booking-details">
+                <h3>📋 Cancelled Booking</h3>
+                <p><strong>Resource:</strong> ${resourceName}</p>
+                <p><strong>Date:</strong> ${bookingDate}</p>
+                <p><strong>Booking ID:</strong> ${bookingId}</p>
+            </div>
+            
+            <p>You can make a new booking anytime through our campus resource management system.</p>
+            
+            <div class="footer">
+                <p>Campus Resource Management System<br>
+                University Email: campus@university.edu</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
 }
 
-# Get online users list
-#
-# + return - List of online user IDs
-public isolated function getOnlineUsers() returns string[] {
-    return ws:getOnlineUsers();
+# Format waitlist notification email template
+# 
+# + data - Template data
+# + return - HTML email content
+function formatWaitlistNotificationTemplate(map<anydata> data) returns string {
+    string userName = data.get("userName").toString();
+    string resourceName = data.get("resourceName").toString();
+    string availableDate = data.get("availableDate").toString();
+    string availableTime = data.get("availableTime").toString();
+
+    return string `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4; }
+            .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; }
+            .header { text-align: center; color: #ff9800; margin-bottom: 30px; }
+            .booking-details { background: #fff3e0; padding: 20px; border-radius: 8px; margin: 20px 0; }
+            .footer { text-align: center; color: #666; margin-top: 30px; font-size: 12px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🔔 Resource Available!</h1>
+            </div>
+            
+            <p>Dear ${userName},</p>
+            
+            <p>Great news! A resource you were waiting for is now available:</p>
+            
+            <div class="booking-details">
+                <h3>📋 Available Resource</h3>
+                <p><strong>Resource:</strong> ${resourceName}</p>
+                <p><strong>Available Date:</strong> ${availableDate}</p>
+                <p><strong>Available Time:</strong> ${availableTime}</p>
+            </div>
+            
+            <p>Please book quickly as this slot may be taken by other users. Log in to the campus resource management system to secure your booking.</p>
+            
+            <div class="footer">
+                <p>Campus Resource Management System<br>
+                University Email: campus@university.edu</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
 }
 
-# Cleanup inactive WebSocket connections
-#
-# + timeoutMinutes - Timeout in minutes
-# + return - Number of cleaned up connections
-public isolated function cleanupInactiveConnections(int timeoutMinutes) returns int {
-    return ws:cleanupInactiveConnections(timeoutMinutes);
+# Format resource reminder email template
+# 
+# + data - Template data
+# + return - HTML email content
+function formatResourceReminderTemplate(map<anydata> data) returns string {
+    string userName = data.get("userName").toString();
+    string resourceName = data.get("resourceName").toString();
+    string reminderDate = data.get("reminderDate").toString();
+    string reminderTime = data.get("reminderTime").toString();
+
+    return string `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4; }
+            .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; }
+            .header { text-align: center; color: #1976d2; margin-bottom: 30px; }
+            .booking-details { background: #e3f2fd; padding: 20px; border-radius: 8px; margin: 20px 0; }
+            .footer { text-align: center; color: #666; margin-top: 30px; font-size: 12px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>⏰ Booking Reminder</h1>
+            </div>
+            
+            <p>Dear ${userName},</p>
+            
+            <p>This is a friendly reminder about your upcoming booking:</p>
+            
+            <div class="booking-details">
+                <h3>📋 Upcoming Booking</h3>
+                <p><strong>Resource:</strong> ${resourceName}</p>
+                <p><strong>Date:</strong> ${reminderDate}</p>
+                <p><strong>Time:</strong> ${reminderTime}</p>
+            </div>
+            
+            <p>Please make sure to arrive on time. If you need to cancel or modify your booking, please do so at least 24 hours in advance.</p>
+            
+            <div class="footer">
+                <p>Campus Resource Management System<br>
+                University Email: campus@university.edu</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
 }
 
-# Initialize Kafka consumers
-#
-# + return - Success or error
-public isolated function initializeKafka() returns error? {
-    return kafka:initializeKafkaConsumers();
+# Format account welcome email template
+# 
+# + data - Template data
+# + return - HTML email content
+function formatAccountWelcomeTemplate(map<anydata> data) returns string {
+    string userName = data.get("userName").toString();
+    string userEmail = data.get("userEmail").toString();
+
+    return string `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4; }
+            .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; }
+            .header { text-align: center; color: #4caf50; margin-bottom: 30px; }
+            .welcome-box { background: #e8f5e8; padding: 20px; border-radius: 8px; margin: 20px 0; }
+            .footer { text-align: center; color: #666; margin-top: 30px; font-size: 12px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🎓 Welcome to Campus Resources!</h1>
+            </div>
+            
+            <p>Dear ${userName},</p>
+            
+            <p>Welcome to the Campus Resource Management System! Your account has been successfully created.</p>
+            
+            <div class="welcome-box">
+                <h3>👤 Account Details</h3>
+                <p><strong>Name:</strong> ${userName}</p>
+                <p><strong>Email:</strong> ${userEmail}</p>
+            </div>
+            
+            <p>You can now start booking campus resources like meeting rooms, labs, equipment, and more. Log in to explore all available resources and make your first booking!</p>
+            
+            <div class="footer">
+                <p>Campus Resource Management System<br>
+                University Email: campus@university.edu</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
 }
 
-# Start all Kafka event consumers
-#
-# + return - Success or error
-public isolated function startKafkaConsumers() returns error? {
-    // Start all consumer workers
-    _ = start kafka:startBookingEventConsumer();
-    _ = start kafka:startWaitlistEventConsumer();
-    _ = start kafka:startConflictEventConsumer();
-    _ = start kafka:startNotificationEventConsumer();
-    _ = start kafka:startUserEventConsumer();
-    _ = start kafka:startResourceEventConsumer();
+# Format password reset email template
+# 
+# + data - Template data
+# + return - HTML email content
+function formatPasswordResetTemplate(map<anydata> data) returns string {
+    string userName = data.get("userName").toString();
+    string resetLink = data.get("resetLink").toString();
+    string expiryTime = data.get("expiryTime").toString();
+
+    return string `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4; }
+            .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; }
+            .header { text-align: center; color: #f44336; margin-bottom: 30px; }
+            .reset-box { background: #ffebee; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center; }
+            .reset-button { display: inline-block; padding: 12px 25px; background: #f44336; color: white; text-decoration: none; border-radius: 5px; margin: 15px 0; }
+            .footer { text-align: center; color: #666; margin-top: 30px; font-size: 12px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🔐 Password Reset Request</h1>
+            </div>
+            
+            <p>Dear ${userName},</p>
+            
+            <p>You have requested to reset your password for the Campus Resource Management System.</p>
+            
+            <div class="reset-box">
+                <h3>🔑 Reset Your Password</h3>
+                <p>Click the button below to reset your password:</p>
+                <a href="${resetLink}" class="reset-button">Reset Password</a>
+                <p><strong>Link expires:</strong> ${expiryTime}</p>
+            </div>
+            
+            <p><strong>Security Note:</strong> If you didn't request this password reset, please ignore this email and your password will remain unchanged.</p>
+            
+            <div class="footer">
+                <p>Campus Resource Management System<br>
+                University Email: campus@university.edu</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+}
+
+# Format generic email template
+# 
+# + data - Template data
+# + return - HTML email content
+function formatGenericTemplate(map<anydata> data) returns string {
+    string message = data.get("message").toString();
+    string title = "Notification";
     
-    log:printInfo("✅ All Kafka event consumers started");
-    return;
+    anydata titleData = data.get("title");
+    if titleData is string {
+        title = titleData;
+    }
+
+    return string `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4; }
+            .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; }
+            .header { text-align: center; color: #333; margin-bottom: 30px; }
+            .message-box { background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0; }
+            .footer { text-align: center; color: #666; margin-top: 30px; font-size: 12px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>📧 ${title}</h1>
+            </div>
+            
+            <div class="message-box">
+                <p>${message}</p>
+            </div>
+            
+            <div class="footer">
+                <p>Campus Resource Management System<br>
+                University Email: campus@university.edu</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
 }
 
-# Close Kafka consumers
-#
-# + return - Success or error
-public isolated function closeKafka() returns error? {
-    return kafka:closeKafkaConsumers();
+# Get current timestamp in UTC
+# 
+# + return - Current UTC timestamp as string
+public function getCurrentTimestamp() returns string {
+    time:Utc currentTime = time:utcNow();
+    return currentTime.toString();
+}
+
+# Log email activity
+# 
+# + emailId - Email ID
+# + recipient - Email recipient
+# + status - Email status ("sent", "failed", "pending")
+public function logEmailActivity(string emailId, string recipient, string status) {
+    log:printInfo(string `📧 Email Activity - ID: ${emailId}, To: ${recipient}, Status: ${status}`);
 }

@@ -42,13 +42,13 @@
 - **Similarity Matching**: Find similar booking patterns and user preferences
 - **Optimization Engine**: Continuous learning for resource utilization optimization
 
-### 5. Notification & Communication System
-- **Real-time Notifications**: WebSocket-based live booking updates
+### 5. Email Notification System
 - **Email Notifications**: Booking confirmations and reminders via campus email
-- **Mobile Push**: Native mobile app push notifications
-- **Admin Alerts**: System-wide notifications for administrators
-- **Integration Ready**: Slack/Teams integration for administrative workflows
-- **Event-Driven Messaging**: Kafka-based notification triggers
+- **Email Templates**: Professional HTML templates for different notification types
+- **Admin Email Alerts**: System-wide email notifications for administrators
+- **Email Delivery Tracking**: Monitor delivery status and handle failures
+- **Integration Ready**: SMTP integration with university email systems
+- **Event-Driven Email**: Kafka-based email notification triggers
 
 ### 6. Analytics & Insights Dashboard
 - **Real-time Utilization**: Live resource usage monitoring and analytics
@@ -83,7 +83,7 @@
 - **Throughput**: Handle 5000+ concurrent campus users during peak hours
 - **Scalability**: Horizontal scaling capability for multiple campuses
 - **AI Performance**: Sub-second AI recommendations via Pinecone integration
-- **Real-time Updates**: WebSocket connections for live resource status
+- **Email Delivery**: Reliable email delivery with 99% success rate
 - **Caching Strategy**: Multi-layer caching for resource availability and user preferences
 
 ### 3. Reliability
@@ -108,7 +108,7 @@
 - **Message Queuing**: Kafka for event-driven architecture and real-time updates
 - **Campus Database**: MySQL for resource and booking data with optimized queries
 - **Email Integration**: SMTP integration with university email systems
-- **Mobile Ready**: WebSocket and REST APIs optimized for mobile applications
+- **Mobile Ready**: REST APIs optimized for mobile applications
 
 ## Technical Requirements
 
@@ -123,10 +123,10 @@
 - **Monitoring**: Built-in Ballerina observability with custom metrics
 
 ### 2. Ballerina Modules
-- `ballerina/http` - HTTP services, clients, and WebSocket connections
+- `ballerina/http` - HTTP services and clients for REST APIs
 - `ballerina/sql` - Database operations for campus resources and bookings
-- `ballerina/kafka` - Event streaming for real-time updates
-- `ballerina/websocket` - Real-time communication for live booking updates
+- `ballerina/kafka` - Event streaming for email notification triggers
+- `ballerina/email` - Email sending capabilities for campus notifications
 - `ballerina/auth` - Authentication and authorization with Asgardeo
 - `ballerina/jwt` - JWT token handling and validation
 - `ballerina/time` - Scheduling operations and time-based analytics
@@ -156,7 +156,7 @@
 - **User**: id, email, role, department, preferences, verification_status
 - **Resource**: id, name, type, capacity, features, location, availability
 - **Booking**: id, user_id, resource_id, start_time, end_time, status, purpose
-- **Notification**: id, user_id, type, message, channel, status, booking_id
+- **Email**: id, user_id, type, template, subject, body, status, booking_id
 
 ## API Requirements
 
@@ -204,11 +204,13 @@
 - `GET /analytics/predictions` - AI-powered demand predictions
 - `GET /analytics/reports/{type}` - Generate custom reports
 
-### 7. Notification Service APIs
-- `POST /notifications` - Send notification
-- `GET /notifications` - List user notifications
-- `PUT /notifications/{id}/read` - Mark notification as read
-- `POST /notifications/broadcast` - Broadcast to user groups (admin)
+### 7. Email Service APIs
+- `POST /email/send` - Send email notification
+- `GET /email/status/{id}` - Check email delivery status
+- `POST /email/templates` - Create email template (admin)
+- `GET /email/templates` - List available templates
+- `POST /email/broadcast` - Send email to user groups (admin)
+- `GET /email/history` - Get email sending history
 
 ## Compliance Requirements
 - **University Integration**: Seamless integration with existing campus management systems
