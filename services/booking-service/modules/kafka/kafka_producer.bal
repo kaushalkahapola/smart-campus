@@ -4,6 +4,7 @@ import ballerina/uuid;
 import ballerina/time;
 
 # Kafka configuration
+configurable string[] bootstrap_servers = ["localhost:9092"];
 configurable string client_id = "booking-service";
 configurable string acks = "all";
 configurable int retries = 3;

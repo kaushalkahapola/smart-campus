@@ -1,0 +1,45 @@
+# Base image
+FROM ballerina/ballerina:latest
+
+# Set working directory
+WORKDIR /home/ballerina
+
+# Copy only the files needed for dependency resolution first (optimization)
+# Copy Ballerina.toml and Dependencies.toml if they exist
+COPY Ballerina.toml Dependencies.toml* ./
+
+# Copy the rest of the source code
+COPY . .
+
+# Fix permissions
+USER root
+RUN chown -R ballerina:ballerina /home/ballerina
+USER ballerina
+
+# Create an entrypoint script to adapt Config.toml for Docker environment
+# This replaces 'localhost' with service names (mysql, kafka, redis)
+USER root
+RUN echo '#!/bin/bash' > /home/ballerina/docker-entrypoint.sh && \
+    echo 'if [ -f Config.toml ]; then' >> /home/ballerina/docker-entrypoint.sh && \
+    echo '  echo "Config.toml found, creating Config.docker.toml with service replacements..."' >> /home/ballerina/docker-entrypoint.sh && \
+    echo '  cp Config.toml Config.docker.toml' >> /home/ballerina/docker-entrypoint.sh && \
+    echo '  # Replace localhost (DB default) with mysql' >> /home/ballerina/docker-entrypoint.sh && \
+    echo '  sed -i "s/localhost/mysql/g" Config.docker.toml' >> /home/ballerina/docker-entrypoint.sh && \
+    echo '  # Fix Kafka which became mysql:9092, back to kafka:9092' >> /home/ballerina/docker-entrypoint.sh && \
+    echo '  sed -i "s/mysql:9092/kafka:9092/g" Config.docker.toml' >> /home/ballerina/docker-entrypoint.sh && \
+    echo '  # Fix Redis which became mysql:6379, back to redis:6379' >> /home/ballerina/docker-entrypoint.sh && \
+    echo '  sed -i "s/mysql:6379/redis:6379/g" Config.docker.toml' >> /home/ballerina/docker-entrypoint.sh && \
+    echo '  echo "Starting Ballerina service with Config.docker.toml..."' >> /home/ballerina/docker-entrypoint.sh && \
+    echo '  bal run --config-file=Config.docker.toml' >> /home/ballerina/docker-entrypoint.sh && \
+    echo 'else' >> /home/ballerina/docker-entrypoint.sh && \
+    echo '  echo "No Config.toml found, starting with default config..."' >> /home/ballerina/docker-entrypoint.sh && \
+    echo '  bal run' >> /home/ballerina/docker-entrypoint.sh && \
+    echo 'fi' >> /home/ballerina/docker-entrypoint.sh && \
+    chmod +x /home/ballerina/docker-entrypoint.sh
+
+USER ballerina
+
+# Expose common ports (documentation only, real exposure in compose)
+EXPOSE 9090 9091 9092 9093 9094 9095
+
+CMD ["/bin/bash", "/home/ballerina/docker-entrypoint.sh"]
