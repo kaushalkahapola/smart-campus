@@ -1,0 +1,63 @@
+# ============================================================
+# Dockerfile.ballerina.aws
+# ECS/Fargate-optimized multi-stage build for Ballerina services
+#
+# STRATEGY: Compile at build time (not at container start).
+# Config is injected at runtime via environment variables,
+# or via a Config.toml mounted from AWS Secrets Manager / SSM.
+#
+# BUILD:
+#   docker build -f Dockerfile.ballerina.aws -t <service-name>:latest .
+#
+# RUN (local test):
+#   docker run -e DB_HOST=... -e KAFKA_BOOTSTRAP=... <service-name>:latest
+# ============================================================
+
+# ---------------------------------------------------------------------------
+# Stage 1: Build — compile source to executable JAR
+# ---------------------------------------------------------------------------
+FROM ballerina/ballerina:2201.10.1 AS builder
+
+WORKDIR /home/ballerina/build
+
+# Copy manifest files first for better layer caching
+COPY Ballerina.toml Dependencies.toml* ./
+
+# Copy full source
+COPY . .
+
+# Fix ownership so ballerina user can compile
+USER root
+RUN chown -R ballerina:ballerina /home/ballerina/build
+USER ballerina
+
+# Compile. Output is ./target/bin/<package-name>.jar
+RUN bal build
+
+# ---------------------------------------------------------------------------
+# Stage 2: Runtime — minimal image with just the JRE + compiled JAR
+# ---------------------------------------------------------------------------
+FROM eclipse-temurin:21-jre-alpine AS runtime
+
+# Create non-root user for security (ECS best practice)
+RUN addgroup -S ballerina && adduser -S ballerina -G ballerina
+
+WORKDIR /app
+
+# Copy the compiled JAR from the builder stage
+COPY --from=builder /home/ballerina/build/target/bin/*.jar ./service.jar
+
+# Copy entrypoint script
+COPY --from=builder /home/ballerina/build/docker-entrypoint-aws.sh ./docker-entrypoint.sh
+RUN chmod +x ./docker-entrypoint.sh
+
+USER ballerina
+
+# Ports are documented here; actual exposure is in ECS Task Definition
+EXPOSE 9090 9091 9092 9093 9094 9095 9096
+
+# Health-check: ECS ALB will do HTTP checks; this is a fallback
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+  CMD wget -qO- http://localhost:${SERVICE_PORT:-9090}/health || exit 1
+
+ENTRYPOINT ["/bin/sh", "./docker-entrypoint.sh"]

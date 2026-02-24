@@ -1,0 +1,125 @@
+# ============================================================
+# docker-compose.aws-local.yml
+#
+# Use this to run microservices LOCALLY but connected to
+# your real AWS infrastructure (MSK + RDS).
+#
+# 1. Fill in the placeholder values below (or export them as
+#    environment variables before running).
+# 2. docker compose -f docker-compose.aws-local.yml up
+#
+# NOTE: The MySQL and Kafka/Zookeeper containers are removed.
+#       Redis is still local (no AWS ElastiCache required for MVP).
+# ============================================================
+
+# ---- Set these with real AWS values before running ----
+x-aws-env:
+  # Amazon RDS for MySQL endpoint
+  &aws-env
+  DB_HOST: ${RDS_ENDPOINT} # e.g. finmate.xxxxxxxxx.us-east-1.rds.amazonaws.com
+  DB_PORT: "3306"
+  DB_USER: ${RDS_USERNAME}
+  DB_PASSWORD: ${RDS_PASSWORD}
+  DB_NAME: campus_resource_db
+
+  # Amazon MSK bootstrap (TLS port 9098 for IAM auth, 9092 for PLAINTEXT within VPC)
+  KAFKA_BOOTSTRAP_SERVERS: ${MSK_BOOTSTRAP_SERVERS} # e.g. b-1.xxx:9098,b-2.xxx:9098
+
+services:
+  # ---------------------------------------------------------------------------
+  # INFRASTRUCTURE (only Redis stays local in this mode)
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:alpine
+    container_name: finmate_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - finmate_net
+
+  # ---------------------------------------------------------------------------
+  # MICROSERVICES (built with ECS Dockerfile, config via env vars)
+  # ---------------------------------------------------------------------------
+  gateway-service:
+    build:
+      context: ./gateway-service
+      dockerfile: ../Dockerfile.ballerina.aws
+    container_name: finmate_gateway_service
+    ports:
+      - "9090:9090"
+    environment:
+      <<: *aws-env
+      SERVICE_PORT: "9090"
+    networks:
+      - finmate_net
+
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: ../Dockerfile.ballerina.aws
+    container_name: finmate_notification_service
+    ports:
+      - "9091:9091"
+    environment:
+      <<: *aws-env
+      SERVICE_PORT: "9091"
+    networks:
+      - finmate_net
+
+  resource-service:
+    build:
+      context: ./resource-service
+      dockerfile: ../Dockerfile.ballerina.aws
+    container_name: finmate_resource_service
+    ports:
+      - "9093:9093"
+    environment:
+      <<: *aws-env
+      SERVICE_PORT: "9093"
+    networks:
+      - finmate_net
+
+  booking-service:
+    build:
+      context: ./booking-service
+      dockerfile: ../Dockerfile.ballerina.aws
+    container_name: finmate_booking_service
+    ports:
+      - "9094:9094"
+    environment:
+      <<: *aws-env
+      SERVICE_PORT: "9094"
+    networks:
+      - finmate_net
+
+  user-service:
+    build:
+      context: ./user-service
+      dockerfile: ../Dockerfile.ballerina.aws
+    container_name: finmate_user_service
+    ports:
+      - "9095:9095"
+    environment:
+      <<: *aws-env
+      SERVICE_PORT: "9095"
+    networks:
+      - finmate_net
+
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: ../Dockerfile.ballerina.aws
+    container_name: finmate_ai_service
+    restart: always
+    ports:
+      - "9096:9096"
+    environment:
+      <<: *aws-env
+      SERVICE_PORT: "9096"
+    networks:
+      - finmate_net
+
+networks:
+  finmate_net:
+    driver: bridge

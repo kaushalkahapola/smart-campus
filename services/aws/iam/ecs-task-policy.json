@@ -1,0 +1,61 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "AllowRDSConnect",
+            "Effect": "Allow",
+            "Action": [
+                "rds-db:connect"
+            ],
+            "Resource": "arn:aws:rds-db:YOUR_REGION:YOUR_ACCOUNT_ID:dbuser:*/campus_app_user"
+        },
+        {
+            "Sid": "AllowMSKConnect",
+            "Effect": "Allow",
+            "Action": [
+                "kafka-cluster:Connect",
+                "kafka-cluster:AlterCluster",
+                "kafka-cluster:DescribeCluster",
+                "kafka-cluster:DescribeTopic",
+                "kafka-cluster:CreateTopic",
+                "kafka-cluster:WriteData",
+                "kafka-cluster:ReadData"
+            ],
+            "Resource": [
+                "arn:aws:kafka:YOUR_REGION:YOUR_ACCOUNT_ID:cluster/smartcampus-msk/*",
+                "arn:aws:kafka:YOUR_REGION:YOUR_ACCOUNT_ID:topic/smartcampus-msk/*/*"
+            ]
+        },
+        {
+            "Sid": "AllowSecretsManagerAccess",
+            "Effect": "Allow",
+            "Action": [
+                "secretsmanager:GetSecretValue"
+            ],
+            "Resource": [
+                "arn:aws:secretsmanager:YOUR_REGION:YOUR_ACCOUNT_ID:secret:smartcampus/*"
+            ]
+        },
+        {
+            "Sid": "AllowECRPull",
+            "Effect": "Allow",
+            "Action": [
+                "ecr:GetAuthorizationToken",
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:GetDownloadUrlForLayer",
+                "ecr:BatchGetImage"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "AllowCloudWatchLogs",
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+            ],
+            "Resource": "arn:aws:logs:YOUR_REGION:YOUR_ACCOUNT_ID:log-group:/ecs/smartcampus/*"
+        }
+    ]
+}
